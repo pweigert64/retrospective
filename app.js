@@ -407,7 +407,7 @@ function getPopupHTML(p, idx) {
     }
 
     const imgHtml = (p.img && p.img.length > 4) 
-        ? `<img src="${getAssetBase(p.year)}/${p.year}${p.img}" class="photo-popup-img" onerror="this.style.display='none'">` 
+        ? `<img src="${getAssetBase(p.year)}/${p.year}/${p.img}" class="photo-popup-img" onerror="this.style.display='none'">` 
         : '';
 
     return `
