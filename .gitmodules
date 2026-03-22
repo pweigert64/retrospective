@@ -1,0 +1,15 @@
+[submodule "data/19XXs"]
+	path = data/19XXs
+	url = https://github.com/pweigert64/retrospective-data-19XXs.git
+[submodule "data/2000s"]
+	path = data/2000s
+	url = https://github.com/pweigert64/retrospective-data-2000s.git
+[submodule "data/2010s"]
+	path = data/2010s
+	url = https://github.com/pweigert64/retrospective-data-2010s.git
+[submodule "data/2020s"]
+	path = data/2020s
+	url = https://github.com/pweigert64/retrospective-data-2020s.git
+[submodule "data/2030s"]
+	path = data/2030s
+	url = https://github.com/pweigert64/retrospective-data-2030s.git
