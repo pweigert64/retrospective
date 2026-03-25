@@ -40,7 +40,7 @@ function getAssetBase(year) {
 /* -------------------------------------------------------------------------
  * TOGGLE Sidebar (Hamburger Menu)
  * -----------------------------------------------------------------------*/
-    function toggleSidebar() {
+function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebar-overlay');
     
@@ -844,6 +844,7 @@ function createMarker(p, idx) {
     * HANDLE DEEP LINK extracts and applies the logic of parameterized search
     * Handles links like: ?album:Abc123&activity:ski
     --------------------------------------------------------------------------*/
+// Am Ende deiner Initialisierung in app.js
 function handleDeepLink() {
     const urlParams = new URLSearchParams(window.location.search);
     const query = urlParams.get('s')?.toLowerCase();
@@ -853,11 +854,17 @@ function handleDeepLink() {
     // 1. Search (Modular Filter)
     const matches = photoMarkers.filter(p => {
         const titleMatch = p.title?.toLowerCase().includes(query);
-        const activityMatch = p.activity?.toLowerCase().includes(query);
-        return titleMatch || activityMatch;
+        return titleMatch;
     });
 
-    if (matches.length > 0) {
+    if (matches.length === 1) {
+        const targetIdx = photoMarkers.indexOf(matches[0]);
+        jumpToMap(targetIdx); // Reuse the jumpToMap logic to handle the view switch and focusing
+        return true; // link found
+    }
+
+    console.log("handleDeepLink::matches.length:", matches.length);
+    if (matches.length > 1) {
         switchView('map'); // Switch from Portal to map to make markers visible!
         const bounds = L.latLngBounds();
         
@@ -867,18 +874,9 @@ function handleDeepLink() {
             const m = createMarker(p, idx); 
             m.addTo(map);
             currentMarkers.push(m);
-            bounds.extend([p.lat, p.lon]);
+            bounds.extend([p.lat, p.lon]); 
         });
-
-        // 2. Adjust View
-        if (matches.length === 1) {
-            map.flyTo([matches[0].lat, matches[0].lon], 14);
-            // Find the marker we just added and open it
-            const targetIdx = photoMarkers.indexOf(matches[0]);
-            currentMarkers.find(m => m._idx === targetIdx)?.openPopup();
-        } else {
-            map.flyToBounds(bounds, { padding: [50, 50] });
-        }
+        map.flyToBounds(bounds, { padding: [50, 50] });
         return true; // link found
     }
     return false; // no match for link
