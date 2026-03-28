@@ -7,7 +7,7 @@ const COLORS = {
     'bike': '#065f46', 'bike+hike': '#f97316', 'trip': '#9333ea', 'unknown': '#6b7280' 
 };
 const ICONS_MAP = { 
-    'ski': '❄️', 'piste': '🚠', 'hike': '🥾', 'climb': '⛰️', 'rope': '🪢', 'bike': '🚴', 'bike+hike': '🚵', 'trip': '🏛️' 
+    'ski': '❄️', 'piste': '🚠', 'hike': '🥾', 'climb': '⛰️', 'rope': '🧗', 'bike': '🚴', 'bike+hike': '🚵', 'trip': '🏛️' 
 };
 
 let map, overviewLayer, detailLayer, hikingLayer, cyclingLayer;

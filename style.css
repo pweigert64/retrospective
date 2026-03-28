@@ -1,5 +1,6 @@
 /* --- CORE LAYOUT --- */
-html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; 
+    font-family: 'Inter', 'Noto Color Emoji', 'Segoe UI Emoji', sans-serif; }
 #main-layout { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
 
 /* Sidebar Base Styles */
@@ -111,14 +112,16 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2); 
 }
 
-/* Marker & Popup Styles */
+/* Marker & Popup Styles, priority to noto emojis */
+.use-noto { font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif; }
 .emoji-marker-outer { width: 28px!important; height: 28px!important; border-radius: 50%; border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 .marker-ski { background: #9333ea; } .marker-piste { background: #4f46e5; } 
 .marker-hike { background: #b54708; } .marker-climb { background: #eb1911d8; } .marker-rope { background: #d80303; } 
 .marker-bike { background: #065f46; } .marker-bike-hike { background: #f97316; } .marker-trip { background: #928cfa; } 
 .marker-unknown { background: #6b7280; }
 .emoji-marker-inner { font-size: 11pt; background: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
-.filter-button { padding: 8px; font-size: 0.75rem; font-weight: 700; border-radius: 8px; cursor: pointer; border: 1px solid #d1d5db; text-align: center; width: 100%; }
+.filter-button { padding: 8px; font-size: 0.75rem; font-weight: 700; border-radius: 8px; cursor: pointer; border: 1px solid #d1d5db; 
+    text-align: center; width: 100%; font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif; }
 .filter-button-active { background: #4f46e5 !important; color: white !important; }
 /* Activities Popup & Title Styling */
 .leaflet-popup-content { width: 200px !important; margin: 10px; }
