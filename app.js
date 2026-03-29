@@ -1,4 +1,3 @@
-//const ASSET_BASE = 'https://raw.githubusercontent.com/pweigert64/retrospective/main';
 const myTitle = document.title;
 document.getElementById('current-year-label').textContent = myTitle;
 
@@ -19,22 +18,17 @@ let MAPTILER_KEY, SHEETS_CSV_URL;
 let typingTimer;               // Timer for real-time debounce (hesitate with immediate search)
 const doneTypingInterval = 1200; // Wait ###ms after typing stops
 
+// Calculate this ONCE when the page loads
+const IS_LOCAL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 /* -------------------------------------------------------------------------
  * which repo holds the assets for a given year?
  * befor y2k: 19XXs repo, after y2k: calculate decade and return e.g. "2020s"
  * Beyond that path the year-folder holds all gpx/img files.
  * -----------------------------------------------------------------------*/
 function getAssetBase(year) {
-    // before 2000 everything goes to the 19XXs-Repo
-    if (year < 2000) {
-        return "data/19XXs";
-    }
-
-    // after 2000 the decade defines the repo, so we calculate it 
-    // by cutting off the last digit and adding a "0"
-    // e.g: 2026 -> 2020 -> "2020s"
-    const decade = Math.floor(year / 10) * 10;
-    return `data/${decade}s`;
+    const base = IS_LOCAL? "./data/" : ASSETBASE_URL;
+        
+    return `${base}${year}/`;
 }
 
 /* -------------------------------------------------------------------------
@@ -93,9 +87,11 @@ async function loadConfig() {
     const text = await response.text();
     const keyMatch = text.match(/MAPTILER_KEY\s*=\s*['"]([^'"]+)['"]/);
     const urlMatch = text.match(/SHEETS_CSV_URL\s*=\s*['"]([^'"]+)['"]/);
-    if (keyMatch && urlMatch) {
+    const assetBaseMatch = text.match(/ASSETBASE_URL\s*=\s*['"]([^'"]+)['"]/);
+    if (keyMatch && urlMatch && assetBaseMatch) {
         MAPTILER_KEY = keyMatch[1];
         SHEETS_CSV_URL = urlMatch[1];
+        ASSETBASE_URL = assetBaseMatch[1];
     }
 }
 
@@ -407,7 +403,7 @@ function getPopupHTML(p, idx) {
     }
 
     const imgHtml = (p.img && p.img.length > 4) 
-        ? `<img src="${getAssetBase(p.year)}/${p.year}/${p.img}" class="photo-popup-img" onerror="this.style.display='none'">` 
+        ? `<img src="${getAssetBase(p.year)}/${p.img}" class="photo-popup-img" onerror="this.style.display='none'">` 
         : '';
 
     return `
@@ -466,7 +462,7 @@ function createPortalCard(p, idx) {
     return `
         <div class="bg-white shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-all border border-gray-100">
             <div class="portal-img-container cursor-pointer" onclick="jumpToMap(${idx})">
-                <img src="${getAssetBase(p.year)}/${p.year}/${p.img}" 
+                <img src="${getAssetBase(p.year)}/${p.img}" 
                     class="w-full h-full object-contain" loading="lazy" onerror="this.style.display='none'">
             </div>
             
@@ -710,7 +706,7 @@ function setupEvents() {
     --------------------------------------------------------------------------*/
 window.loadGpxTrack = function(idx, shouldZoom = true) {
     const p = photoMarkers[idx];
-    const url = `${getAssetBase(p.year)}/${p.year}/${p.gpx}`;
+    const url = `${getAssetBase(p.year)}/${p.gpx}`;
     const rawAct = p.activity?.toLowerCase().trim();
     // Use COLORS keys directly (ski, hike, etc.)
     const color = COLORS[rawAct] || COLORS['unknown'];
@@ -782,16 +778,18 @@ function getFilteredTours(targetView = 'map') {
     }
 
     // PORTAL LOGIC: Hide duplicates to show only the "Ghost" (Collection Header)
-    const seenAlbums = new Set();
+    const seenCollectionAlbums = new Set();
     return filtered.filter(p => {
         // If no album is provided, always show the card
         if (!p.album || p.album === "" || p.album === "#") return true;
         
         // If we've already seen this album URL, hide this row
-        if (seenAlbums.has(p.album)) return false;
+        if (seenCollectionAlbums.has(p.album)) return false;
         
-        // Register album and show this first row (the Ghost/Header)
-        seenAlbums.add(p.album);
+        // Register collectionalbum w.o. coordinatesand show this first row (the Ghost/Header)
+        if (!(p.lat && p.lon)) {
+            seenCollectionAlbums.add(p.album);
+        }
         return true;
     });
 }
