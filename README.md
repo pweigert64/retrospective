@@ -1,10 +1,3 @@
-# alpine Retrospective, Tourenbuch
-# This is the core website code presenting my mountaineering activities in a hybrid view: chronologic and geographic.
-# My homebase is in Linz - so no wonder that most activies will be found in Totes Gebirge, Gesäuse and Dachstein.
-# Biking mainly in Mühlviertel, but with aid of Klimaticket i am exploring more regions by bike & rail.
-# By now I am still riding a bio-bike but for ski & bike combinations I often woul prefer an e-bike [if I only had one :-)]
-# Each activity may lead to an Album with a story included, is merked with a webp-image and mostly refers to a track on the map in gpx format.
-
 # Alpine Retrospective | Digitales Tourenbuch
 
 **Live Website:** [(https://pweigert64.github.io/retrospective/)]
