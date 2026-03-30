@@ -411,7 +411,7 @@ function getPopupHTML(p, idx) {
             ${imgHtml}
             <div class="popup-title" title="${p.title}">${p.title}</div>
             <div style="font-size: 9px; color: #666; margin-bottom: 8px;">
-                ${displayIcon} ${p.activity || 'Archived'}
+                <span class="use-noto" style="font-size: 14px;">${displayIcon}</span> ${p.activity || 'Archived'}
             </div>
             <div class="flex flex-row gap-2 justify-center">
                 <a ${albumBtnLink} class="flex-1 p-2 py-[4px] ${albumBtnClass} text-white text-[10px] font-bold rounded flex items-center justify-center leading-none">
@@ -447,7 +447,7 @@ function createPortalCard(p, idx) {
     const displayIcon = ICONS_MAP[rawAct] || '❓';
     
     // --- RESTORED metaHtml DEFINITION ---
-    let metaHtml = `<span class="mr-1.5">${displayIcon}</span>`;
+    let metaHtml = `<span class="use-noto mr-1.5">${displayIcon}</span>`;
     if (p.tags && p.tags.trim().length > 0) {
         metaHtml += `<span class="text-gray-400 font-normal">${p.tags}</span>`;
     }
@@ -468,7 +468,9 @@ function createPortalCard(p, idx) {
             
             <div class="p-3 flex flex-col flex-grow">
                 <h3 class="font-bold text-gray-900 leading-tight mb-1 text-sm line-clamp-2">${p.title}</h3>
-                <div class="text-[11px] font-bold text-gray-500 truncate mb-4">${metaHtml}</div>
+                <div class="text-[11px] font-bold text-gray-500 truncate mb-4" title="${p.tags || ''}">
+                    ${metaHtml}
+                </div>
 
                 <div class="mt-auto flex gap-2">
                     ${hasAlbum ? 
