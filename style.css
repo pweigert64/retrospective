@@ -6,7 +6,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 /* Sidebar Base Styles */
 #sidebar { 
     width: 130px; 
-    background: white; 
+    background: rgb(255, 255, 255); 
     border-right: 1px solid #e5e7eb; 
     display: flex; 
     flex-direction: column; 
@@ -72,7 +72,37 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     white-space: nowrap;    /* NO second line, ever */
     overflow: hidden;       /* Hide extra text if it doesn't fit */
     text-overflow: ellipsis; /* Add "..." if text is too long */
-    font-size: 15px;        /* Fixed size for reliability */
+    font-size: 14px;        /* Fixed size for reliability */
+}
+
+/* The filter bar with the activity switches */
+#header-filter-bar {
+    -ms-overflow-style: none;  /* IE/Edge */
+    scrollbar-width: none;     /* Firefox */
+}
+#header-filter-bar::-webkit-scrollbar {
+    display: none;             /* Chrome/Safari */
+}
+
+/* Die Buttons im Header etwas kleiner und feiner */
+#header-filter-bar .filter-button {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    font-size: 1.5rem;
+    border-radius: 50%;
+    border: 1px solid #e5e7eb;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-family: 'Noto Color Emoji', sans-serif !important;
+}
+
+#header-filter-bar .filter-button-active {
+    background: #d3f6b7 !important; 
+    border-color: #7d7d7e !important;
 }
 
 /* View Containers: Absolute positioning relative to #content-area */

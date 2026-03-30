@@ -30,12 +30,23 @@
 	<div id="sidebar-overlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/30 z-[14000]"></div>
 	
     <div id="content-area" class="flex-1 flex flex-col h-screen overflow-hidden">
-        <header id="top-nav" class="flex items-center justify-between px-4 h-[60px] border-b shrink-0">
+        <header id="top-nav" class="flex items-center justify-between px-4 h-[60px] border-b shrink-0 gap-2">
 		 	 <button onclick="toggleSidebar()" class="md:hidden mr-2 text-2xl" title="Menu">☰</button>
-			 <button onclick="toggleTxtSearch()" class="flex items-center gap-2 hover:bg-slate-100 p-1 rounded-lg transition-colors">
+			 <button onclick="toggleTxtSearch()" class="flex items-center shrink-0 gap-2 hover:bg-slate-100 p-1 rounded-lg transition-colors">
 				<span class="text-lg">🔍</span>
 				<div id="current-year-label" class="font-bold text-slate-500 tracking-normal italic"></div>
 			 </button>
+
+			 <div class="flex items-center gap-1 overflow-x-auto no-scrollbar ml-auto min-w-0" id="header-filter-bar">
+				<button class="filter-button filter-button-active" data-activity="ski">❄️</button>
+				<button class="filter-button filter-button-active" data-activity="piste">🚠</button>
+				<button class="filter-button filter-button-active" data-activity="hike">🥾</button>
+				<button class="filter-button filter-button-active" data-activity="climb">⛰️</button>
+				<button class="filter-button filter-button-active" data-activity="rope">🧗</button>
+				<button class="filter-button filter-button-active" data-activity="bike">🚴</button>
+				<button class="filter-button filter-button-active" data-activity="bike+hike">🚵</button>
+				<button class="filter-button filter-button-active" data-activity="trip">🏛️</button>
+			 </div>
              <div class="flex gap-2 bg-gray-100 p-1 rounded-xl">
                 <button onclick="switchView('portal')" id="nav-portal" class="px-2 py-2 rounded-lg bg-white shadow-sm text-2xl">🗓️</button>
                 <button onclick="switchView('map')" id="nav-map" class="px-2 py-2 rounded-lg opacity-50 text-2xl">🗺️</button>
@@ -80,18 +91,8 @@
 
 					<div id="activity-settings-group" class="floating-container" style="bottom: 20px; right: 15px;">
 						<div id="activity-panel" class="pop-out-panel">
-							<div class="text-[10px] font-bold text-gray-400 uppercase">Activity Filter:</div>
 							<!-- removed year selector -->
-							<div class="grid grid-cols-8 gap-0.5">
-								<button class="filter-button filter-button-active p-1 text-base" data-activity="ski">❄️</button>
-								<button class="filter-button filter-button-active p-1 text-base" data-activity="piste">🚠</button>
-								<button class="filter-button filter-button-active p-1 text-base" data-activity="hike">🥾</button>
-								<button class="filter-button filter-button-active p-1 text-base" data-activity="climb">⛰️</button>
-								<button class="filter-button filter-button-active p-1 text-base" data-activity="rope">🧗</button>
-								<button class="filter-button filter-button-active p-1 text-base" data-activity="bike">🚴</button>
-								<button class="filter-button filter-button-active p-1 text-base" data-activity="bike+hike">🚵</button>
-								<button class="filter-button filter-button-active p-1 text-base" data-activity="trip">🏛️</button>
-							</div>
+							<!-- removed activity filters -->
 							<div class="pt-1 border-t">
 								<div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Track Control:</div>
 								<div class="flex gap-1 mb-2">

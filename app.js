@@ -232,7 +232,7 @@ function switchView(view) {
 
     // seems obsolete, but ensures inital setting on refresh (if year not changed)
     const label = document.getElementById('current-year-label');
-    label.innerText = `${myTitle}: ${activeYear}`;
+    label.innerText = `${myTitle}: ${activeYear}` + '\u200A'; // add a hairspace to prevent cut of last character
 
     if(isMap && map) {
         setTimeout(() => {
@@ -318,7 +318,7 @@ window.updateActiveYear = function(yr) {
     // Update the Top Nav Label
     const isMapVisible = (document.getElementById('map-view').style.display === 'block');
     const label = document.getElementById('current-year-label');
-    label.innerText = `${myTitle}: ${yr}`;
+    label.innerText = `${myTitle}: ${yr}`+ '\u200A'; // add a hairspace to prevent cut of last character
     
     // Refresh views
     if ( isMapVisible ) {
@@ -411,7 +411,7 @@ function getPopupHTML(p, idx) {
             ${imgHtml}
             <div class="popup-title" title="${p.title}">${p.title}</div>
             <div style="font-size: 9px; color: #666; margin-bottom: 8px;">
-                <span class="use-noto" style="font-size: 14px;">${displayIcon}</span> ${p.activity || 'Archived'}
+                <span class="use-noto" style="font-size: 14px;">${displayIcon}</span> ${p.activity || 'unknown'}
             </div>
             <div class="flex flex-row gap-2 justify-center">
                 <a ${albumBtnLink} class="flex-1 p-2 py-[4px] ${albumBtnClass} text-white text-[10px] font-bold rounded flex items-center justify-center leading-none">
@@ -682,11 +682,11 @@ function setupEvents() {
                 // 2. Toggle the true/false value in our Global State
                 activeFilters[activityKey] = !activeFilters[activityKey];
                 
-                // 3. Update the button's look (Purple if active, Gray if not)
+                // 3. Update the button's look
                 btn.classList.toggle('filter-button-active', activeFilters[activityKey]);
                 
-                // 4. Refresh the map to show/hide the markers
-                renderMarkers();
+                // 4. Refresh map/portal to reflect the new filter state
+                executeSearch(activeTxtSearch,false); // use the search function to refresh views without changing the search term
             };
         });
     document.getElementById('hike-layer-btn').onclick = function() {
@@ -825,6 +825,7 @@ function createMarker(p, idx) {
     .bindPopup(getPopupHTML(p, idx), {
         minWidth: 200,
         maxWidth: 200,
+        closeButton: false,
         className: 'custom-tour-popup'
     })
     .bindTooltip(p.title, { 
