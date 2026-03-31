@@ -207,12 +207,40 @@ function getCurrentView() {
 }
 
 /* -------------------------------------------------------------------------
+ * Determine index of the topmost fully visible potal card.
+ * If a card has its top beyond the header (at 60px) it is fully visible.
+ * ------------------------------------------------------------------------*/
+function getTopPortalIndex() {
+    // 1. Alle aktuell gerenderten Cards im Portal holen
+    const cards = document.querySelectorAll('.portal-card');
+    const headerHeight = 60; // Dein h-[60px] Header
+
+    for (let card of cards) {
+        const rect = card.getBoundingClientRect();
+        
+        // find first card with top > 0 (most of the 200px are visible)
+        // but maybe we should ensure full visibility ...
+        if (rect.top > headerHeight) {
+            // extract Index!
+            return parseInt(card.dataset.idx);
+        }
+    }
+    return null;
+}
+
+/* -------------------------------------------------------------------------
  * Switches between Portal (Grid) and Map (Leaflet)
  * @param {string} view - 'portal' or 'map'
  * ------------------------------------------------------------------------*/
 function switchView(view) {
     const isMap = view === 'map';
-    // FIXED: Using direct style to ensure visibility
+    // retrieve the index of the topmost visible card in the portal before switching
+    let topIdx = null;
+    if (isMap) {
+        topIdx = getTopPortalIndex(); 
+    }
+    
+    // We toggle the display of the two main containers
     document.getElementById('portal-view').style.display = isMap ? 'none' : 'block';
     document.getElementById('map-view').style.display = isMap ? 'block' : 'none';
     
@@ -238,6 +266,12 @@ function switchView(view) {
         setTimeout(() => {
             map.invalidateSize();
             renderMarkers(); // Force markers to re-evaluate their 'active' status
+             console.log("switchView::Top Portal Index:", topIdx);
+            if (topIdx !== null && photoMarkers[topIdx] && photoMarkers[topIdx].lat && photoMarkers[topIdx].lon)
+                { map.flyTo([photoMarkers[topIdx].lat, photoMarkers[topIdx].lon], 11, { duration: 1.5 }); }
+            else
+                { window.syncToFirstVisible(); }
+
         }, 300); // Give CSS time to render the div
     } else {
         renderPortal();
@@ -460,7 +494,7 @@ function createPortalCard(p, idx) {
     const canShowOnMap = hasLocation || isCollection;
     
     return `
-        <div class="bg-white shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-all border border-gray-100">
+        <div class="portal-card bg-white shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-all border border-gray-100" data-idx="${idx}">
             <div class="portal-img-container cursor-pointer" onclick="jumpToMap(${idx})">
                 <img src="${getAssetBase(p.year)}/${p.img}" 
                     class="w-full h-full object-contain" loading="lazy" onerror="this.style.display='none'">
@@ -519,9 +553,69 @@ function renderPortal() {
 
 /**
  * Transitions to map, ensures correct year filter, focuses on marker, and auto-loads track
- * @param {number} idx - Global index in photoMarkers array
+ * @param {array of numbers} idx - Global indices in photoMarkers array
  */
-function jumpToMap(idx) {
+function jumpToMap(indices) {
+    const idxList = Array.isArray(indices) ? indices : [indices];
+    if (idxList.length === 0) return;
+
+    // Year-Sync
+    const years = [...new Set(idxList.map(i => photoMarkers[i].year.toString()))];
+    
+    if (years.length === 1) {
+        // Alle Ergebnisse aus einem Jahr -> Dieses Jahr aktiv setzen
+        if (activeYear !== years[0]) {
+            window.updateActiveYear(years[0]);
+        }
+    } else if (years.length > 1) {
+        // Ergebnisse aus verschiedenen Jahren -> Auf "All" schalten, damit alle sichtbar sind
+        if (activeYear !== 'All') {
+            window.updateActiveYear('All');
+        }
+    }
+
+    // 2. VIEW SELECTION
+    switchView('map');
+
+    // 3. LOGIC BRANCHING (Timeout für Leaflet-Initialisierung)
+    setTimeout(() => {
+        const markersWithCoords = idxList
+            .map(i => photoMarkers[i])
+            .filter(m => m && m.lat && m.lon);
+
+        if (markersWithCoords.length === 0) return;
+
+        // --- FALL A: MEHRERE MARKER / KOLLEKTION ---
+        if (markersWithCoords.length > 1) {
+            const bounds = L.latLngBounds(markersWithCoords.map(m => [m.lat, m.lon]));
+            map.flyToBounds(bounds, { padding: [80, 80], duration: 1.5 });
+
+            idxList.forEach(i => {
+                const p = photoMarkers[i];
+                if (p && p.gpx && p.gpx.length > 5 && !loadedTracks[i]) {
+                    loadGpxTrack(i, false);
+                }
+            });
+        } 
+        // --- FALL B: EINZELNER MARKER ---
+        else {
+            const p = markersWithCoords[0];
+            const originalIdx = idxList[0];
+            map.flyTo([p.lat, p.lon], 11, { duration: 1.5 });
+
+            map.once('moveend', () => {
+                // Popup Logik bleibt gleich...
+                openPopupForIndex(originalIdx); 
+            });
+
+            if (p.gpx && p.gpx.length > 5 && !loadedTracks[originalIdx]) {
+                loadGpxTrack(originalIdx, true);
+            }
+        }
+    }, 400);
+}
+
+function jumpToMapIdx(idx) {
     const p = photoMarkers[idx];
     const tourYear = p.year.toString();
 
@@ -852,7 +946,7 @@ function handleDeepLink() {
     console.log("handleDeepLink::urlParams.get():", query);
     if (!query) return false; // no deepLink-query
 
-    // 1. Search (Modular Filter)
+    // Search (Modular Filter)
     const matches = photoMarkers.filter(p => {
         const titleMatch = p.title?.toLowerCase().includes(query);
         return titleMatch;
@@ -865,21 +959,12 @@ function handleDeepLink() {
     }
 
     console.log("handleDeepLink::matches.length:", matches.length);
-    if (matches.length > 1) {
-        switchView('map'); // Switch from Portal to map to make markers visible!
-        const bounds = L.latLngBounds();
-        
-        matches.forEach(p => {
-            const idx = photoMarkers.indexOf(p);
-            // Re-use the exact same marker builder!
-            const m = createMarker(p, idx); 
-            m.addTo(map);
-            currentMarkers.push(m);
-            bounds.extend([p.lat, p.lon]); 
-        });
-        map.flyToBounds(bounds, { padding: [50, 50] });
+    if ( matches.length > 1) {
+        const targetIndices = matches.map(m => photoMarkers.indexOf(m));
+        jumpToMap(targetIndices); // Reuse the jumpToMap logic to handle the view switch and focusing
         return true; // link found
     }
+
     return false; // no match for link
 }
 
