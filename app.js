@@ -604,63 +604,15 @@ function jumpToMap(indices) {
             map.flyTo([p.lat, p.lon], 11, { duration: 1.5 });
 
             map.once('moveend', () => {
-                // Popup Logik bleibt gleich...
-                openPopupForIndex(originalIdx); 
-            });
-
-            if (p.gpx && p.gpx.length > 5 && !loadedTracks[originalIdx]) {
-                loadGpxTrack(originalIdx, true);
-            }
-        }
-    }, 400);
-}
-
-function jumpToMapIdx(idx) {
-    const p = photoMarkers[idx];
-    const tourYear = p.year.toString();
-
-    // 1. SYNC YEAR
-    if (activeYear !== 'All' && activeYear !== tourYear) {
-        window.updateActiveYear(tourYear);
-    }
-
-    // 2. VIEW SELECTION (Switch to map first)
-    switchView('map');
-
-    // 3. LOGIC BRANCHING
-    setTimeout(() => {
-        // --- CASE A: COLLECTION HEADER (Missing Lat/Lon + Album Link) ---
-        if ((!p.lat || !p.lon) && p.album && p.album.startsWith('http')) {
-            const albumSiblings = photoMarkers.filter(m => m.album === p.album);
-            const markersWithCoords = albumSiblings.filter(m => m.lat && m.lon);
-
-            if (markersWithCoords.length > 0) {
-                const bounds = L.latLngBounds(markersWithCoords.map(m => [m.lat, m.lon]));
-                map.flyToBounds(bounds, { padding: [50, 50], duration: 1.5 });
-
-                // Load tracks for the whole group
-                albumSiblings.forEach(s => {
-                    const sIdx = photoMarkers.indexOf(s);
-                    if (s.gpx && s.gpx.length > 5 && !loadedTracks[sIdx]) {
-                        loadGpxTrack(sIdx, false); // false = don't fly to individual track
-                    }
-                });
-                return; // End execution for collections
-            }
-        }
-
-        // --- CASE B: SINGLE POINT (Standard Marker) ---
-        if (p.lat && p.lon) {
-            map.flyTo([p.lat, p.lon], 11, { duration: 1.5 });
-
-            map.once('moveend', () => {
+                console.log("Trying to open popup for marker index:", originalIdx);
                 let attempts = 0;
                 const tryOpen = () => {
                     let found = false;
                     map.eachLayer(layer => {
-                        if (layer instanceof L.Marker && layer._idx === idx) {
+                        if (layer instanceof L.Marker && layer._idx === originalIdx) {
                             layer.openPopup();
                             found = true;
+                            console.log
                         }
                     });
                     if (!found && attempts < 10) {
@@ -668,18 +620,14 @@ function jumpToMapIdx(idx) {
                         setTimeout(tryOpen, 100);
                     }
                 };
-                tryOpen();
+                tryOpen(); 
             });
 
-            if (p.gpx && p.gpx.length > 5 && !loadedTracks[idx]) {
-                const track = loadGpxTrack(idx, true);
-                // NEW: Wait for track to finish loading then refresh the UI
-                track.on('loaded', () => {
-                    refreshAllMarkerPopups();
-                });
+            if (p.gpx && p.gpx.length > 5 && !loadedTracks[originalIdx]) {
+                loadGpxTrack(originalIdx, true);
             }
         }
-    }, 400); 
+    }, 400);
 }
 
 /* -------------------------------------------------------------------------
