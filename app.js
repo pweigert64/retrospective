@@ -231,12 +231,14 @@ function getTopPortalIndex() {
 /* -------------------------------------------------------------------------
  * Switches between Portal (Grid) and Map (Leaflet)
  * @param {string} view - 'portal' or 'map'
+ * @param {boolean} shouldFlyToTopIdx - whether to fly to the top visible index
  * ------------------------------------------------------------------------*/
-function switchView(view) {
+function switchView(view, shouldFlyToTopIdx = false) {
     const isMap = view === 'map';
     // retrieve the index of the topmost visible card in the portal before switching
+    console.log(`Switching to ${view} view. shouldFlyToTopIdx: ${shouldFlyToTopIdx}`);  
     let topIdx = null;
-    if (isMap) {
+    if (isMap && shouldFlyToTopIdx) {
         topIdx = getTopPortalIndex(); 
     }
     
@@ -266,12 +268,13 @@ function switchView(view) {
         setTimeout(() => {
             map.invalidateSize();
             renderMarkers(); // Force markers to re-evaluate their 'active' status
-             console.log("switchView::Top Portal Index:", topIdx);
-            if (topIdx !== null && photoMarkers[topIdx] && photoMarkers[topIdx].lat && photoMarkers[topIdx].lon)
-                { map.flyTo([photoMarkers[topIdx].lat, photoMarkers[topIdx].lon], 11, { duration: 1.5 }); }
-            else
-                { window.syncToFirstVisible(); }
-
+            if ( shouldFlyToTopIdx && topIdx !== null ) {
+                console.log("switchView::Top Portal Index:", topIdx, "title:", photoMarkers[topIdx] ? photoMarkers[topIdx].title : "N/A");
+                if (topIdx !== null && photoMarkers[topIdx] && photoMarkers[topIdx].lat && photoMarkers[topIdx].lon)
+                    { map.flyTo([photoMarkers[topIdx].lat, photoMarkers[topIdx].lon], 11, { duration: 1.5 }); }
+                else
+                    { window.syncToFirstVisible(); }
+            }
         }, 300); // Give CSS time to render the div
     } else {
         renderPortal();
@@ -559,52 +562,71 @@ function jumpToMap(indices) {
     const idxList = Array.isArray(indices) ? indices : [indices];
     if (idxList.length === 0) return;
 
-    // Year-Sync
-    const years = [...new Set(idxList.map(i => photoMarkers[i].year.toString()))];
-    
-    if (years.length === 1) {
-        // Alle Ergebnisse aus einem Jahr -> Dieses Jahr aktiv setzen
-        if (activeYear !== years[0]) {
-            window.updateActiveYear(years[0]);
-        }
-    } else if (years.length > 1) {
-        // Ergebnisse aus verschiedenen Jahren -> Auf "All" schalten, damit alle sichtbar sind
-        if (activeYear !== 'All') {
-            window.updateActiveYear('All');
-        }
+    // 1. YEAR-SYNC (behalten wir bei)
+    const years = [...new Set(idxList.map(i => photoMarkers[i]?.year?.toString()).filter(Boolean))];
+    if (years.length > 0) {
+        const targetYear = years.length === 1 ? years[0] : 'All';
+        if (activeYear !== targetYear) window.updateActiveYear(targetYear);
     }
 
-    // 2. VIEW SELECTION
-    switchView('map');
+    switchView('map', false);
 
-    // 3. LOGIC BRANCHING (Timeout für Leaflet-Initialisierung)
     setTimeout(() => {
-        const markersWithCoords = idxList
-            .map(i => photoMarkers[i])
-            .filter(m => m && m.lat && m.lon);
+        let finalMarkersToShow = [];
+        let processedAlbums = new Set();
 
-        if (markersWithCoords.length === 0) return;
+        // 2. ITERATION ÜBER ALLE ÜBERGEBENEN INDIZES
+        idxList.forEach(i => {
+            const p = photoMarkers[i];
+            if (!p) return;
 
-        // --- FALL A: MEHRERE MARKER / KOLLEKTION ---
-        if (markersWithCoords.length > 1) {
-            const bounds = L.latLngBounds(markersWithCoords.map(m => [m.lat, m.lon]));
-            map.flyToBounds(bounds, { padding: [80, 80], duration: 1.5 });
-
-            idxList.forEach(i => {
-                const p = photoMarkers[i];
-                if (p && p.gpx && p.gpx.length > 5 && !loadedTracks[i]) {
+            // CHECK: Ist es ein Collection-Header?
+            if ((!p.lat || !p.lon) && p.album && p.album.startsWith('http')) {
+                // Nur verarbeiten, wenn wir dieses Album in diesem Durchlauf noch nicht hatten
+                if (!processedAlbums.has(p.album)) {
+                    processedAlbums.add(p.album);
+                    
+                    // Alle Marker dieses Albums finden
+                    const albumSiblings = photoMarkers.filter(m => m.album === p.album);
+                    
+                    // Koordinaten-Marker zur Liste hinzufügen
+                    albumSiblings.forEach(s => {
+                        if (s.lat && s.lon) finalMarkersToShow.push(s);
+                        
+                        // GPX-Track laden (falls vorhanden)
+                        const sIdx = photoMarkers.indexOf(s);
+                        if (s.gpx && s.gpx.length > 5 && !loadedTracks[sIdx]) {
+                            loadGpxTrack(sIdx, false);
+                        }
+                    });
+                }
+            } 
+            // ODER: Ist es ein normaler Marker mit Koordinaten?
+            else if (p.lat && p.lon) {
+                finalMarkersToShow.push(p);
+                if (p.gpx && p.gpx.length > 5 && !loadedTracks[i]) {
                     loadGpxTrack(i, false);
                 }
-            });
-        } 
-        // --- FALL B: EINZELNER MARKER ---
-        else {
-            const p = markersWithCoords[0];
-            const originalIdx = idxList[0];
+            }
+        });
+
+        // 3. DARSTELLUNG
+        if (finalMarkersToShow.length === 0) return;
+
+        // Eindeutige Marker sicherstellen (falls ein Marker über Index UND Album kam)
+        const uniqueMarkers = [...new Set(finalMarkersToShow)];
+
+        if (uniqueMarkers.length > 1) {
+            const bounds = L.latLngBounds(uniqueMarkers.map(m => [m.lat, m.lon]));
+            map.flyToBounds(bounds, { padding: [80, 80], duration: 1.5 });
+        } else {
+            // Genau ein Marker gefunden
+            const p = uniqueMarkers[0];
+            const originalIdx = photoMarkers.indexOf(p);
             map.flyTo([p.lat, p.lon], 11, { duration: 1.5 });
 
+            // Popup nur bei Einzelziel öffnen
             map.once('moveend', () => {
-                console.log("Trying to open popup for marker index:", originalIdx);
                 let attempts = 0;
                 const tryOpen = () => {
                     let found = false;
@@ -612,7 +634,6 @@ function jumpToMap(indices) {
                         if (layer instanceof L.Marker && layer._idx === originalIdx) {
                             layer.openPopup();
                             found = true;
-                            console.log
                         }
                     });
                     if (!found && attempts < 10) {
@@ -620,12 +641,8 @@ function jumpToMap(indices) {
                         setTimeout(tryOpen, 100);
                     }
                 };
-                tryOpen(); 
+                tryOpen();
             });
-
-            if (p.gpx && p.gpx.length > 5 && !loadedTracks[originalIdx]) {
-                loadGpxTrack(originalIdx, true);
-            }
         }
     }, 400);
 }

@@ -49,7 +49,7 @@
 			 </div>
              <div class="flex gap-2 bg-gray-100 p-1 rounded-xl">
                 <button onclick="switchView('portal')" id="nav-portal" class="px-2 py-2 rounded-lg bg-white shadow-sm text-2xl">🗓️</button>
-                <button onclick="switchView('map')" id="nav-map" class="px-2 py-2 rounded-lg opacity-50 text-2xl">🗺️</button>
+                <button onclick="switchView('map',true)" id="nav-map" class="px-2 py-2 rounded-lg opacity-50 text-2xl">🗺️</button>
              </div>
         </header>
 
@@ -98,10 +98,6 @@
 							<!-- removed activity filters -->
 							<div class="pt-1 border-t">
 								<div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Track Control:</div>
-								<div class="flex gap-1 mb-2">
-									<input type="text" id="power-search" placeholder="Search..." onkeydown="if(event.key==='Enter')handleDeepLink()" class="flex-grow bg-gray-800 text-white p-1 rounded text-[11px]">
-									<button onclick="clearPowerSearch()" class="text-xs">❌</button>
-								</div>
 								<div class="grid grid-cols-2 gap-1.5">
 									<button class="filter-button bg-emerald-600 text-white border-none" onclick="showAllTracks()">🗺️ ALL</button>
 									<button id="clear-tracks-btn" class="filter-button bg-gray-300 text-white border-none" onclick="clearAllTracks()">🗑️ CLR</button>
