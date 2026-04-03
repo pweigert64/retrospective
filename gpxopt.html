@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Linz GPX-Schredder (v8 - Multi-Track Safe)</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; color: #1a1a1a; max-width: 850px; margin: 0 auto; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #2563eb; margin-top: 0; }
+        #drop-zone { border: 3px dashed #3b82f6; padding: 40px; text-align: center; background: #f8fafc; cursor: pointer; border-radius: 8px; margin-bottom: 20px; transition: 0.2s; }
+        #drop-zone.hover { background: #dbeafe; border-color: #1d4ed8; }
+        .control-panel { background: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .row { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+        .label { font-weight: 600; width: 220px; }
+        input[type="range"] { flex-grow: 1; cursor: pointer; }
+        input[type="number"] { width: 70px; padding: 5px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: monospace; font-size: 1em; }
+        .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em; margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+        .status-box { text-align: center; margin: 20px 0; font-weight: bold; color: #475569; min-height: 1.2em; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #fff; }
+        .btn { display: block; width: 100%; padding: 15px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        #optimize-btn { background: #3b82f6; color: white; margin-bottom: 10px; }
+        #optimize-btn:hover { background: #1d4ed8; }
+        #download-btn { background: #10b981; color: white; display: none; }
+        #download-btn:hover { background: #059669; }
+        .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🚀 GPX-Optimize</h2>
+    
+    <div id="drop-zone">GPX hierher ziehen oder klicken</div>
+    <input type="file" id="file-input" style="display:none" accept=".gpx">
+
+    <div class="control-panel">
+        <div class="row">
+            <span class="label">Min. Punkt-Abstand [1-2000 Meter]:</span>
+            <input type="range" id="dist-slider" min="1" max="2000" value="10">
+            <input type="number" id="dist-input" min="1" max="2000" value="10">
+        </div>
+        <div class="row">
+            <span class="label">Lat/Lon Nachkomma(3-7):</span>
+            <input type="range" id="prec-slider" min="3" max="7" value="5">
+            <input type="number" id="prec-input" min="3" max="7" value="5">
+        </div>
+        <div class="options">
+            <label class="checkbox-label"><input type="checkbox" id="check-time"> Zeitstempel löschen</label>
+            <label class="checkbox-label"><input type="checkbox" id="check-ele"> Höhe komplett löschen (sonst nur auf m runden)</label>
+            <label class="checkbox-label"><input type="checkbox" id="check-garbage" checked> overhead Metadaten löschen</label>
+            <label class="checkbox-label"><input type="checkbox" id="check-minify" > XML komprimieren</label>
+        </div>
+    </div>
+
+    <button id="optimize-btn" class="btn">Datei jetzt optimieren</button>
+    <div id="status-box" class="status-box">Bereit.</div>
+    <button id="download-btn" class="btn">Optimiertes GPX speichern</button>
+</div>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const distSlider = document.getElementById('dist-slider');
+    const distInput = document.getElementById('dist-input');
+    const precSlider = document.getElementById('prec-slider');
+    const precInput = document.getElementById('prec-input');
+    const optimizeBtn = document.getElementById('optimize-btn');
+    const downloadBtn = document.getElementById('download-btn');
+    const statusBox = document.getElementById('status-box');
+
+    let rawXmlData = "";
+    let lastFileName = "";
+    let finalXmlString = "";
+
+    distSlider.oninput = () => { distInput.value = distSlider.value; };
+    distInput.oninput = () => { distSlider.value = distInput.value; };
+    precSlider.oninput = () => { precInput.value = precSlider.value; };
+    precInput.oninput = () => { precSlider.value = precInput.value; };
+
+    dropZone.onclick = () => fileInput.click();
+    fileInput.onchange = e => handleFile(e.target.files[0]);
+    dropZone.ondragover = e => { e.preventDefault(); dropZone.classList.add('hover'); };
+    dropZone.ondragleave = () => dropZone.classList.remove('hover');
+    dropZone.ondrop = e => { e.preventDefault(); dropZone.classList.remove('hover'); handleFile(e.dataTransfer.files[0]); };
+
+    function handleFile(file) {
+        if (!file) return;
+        lastFileName = file.name;
+        const reader = new FileReader();
+        reader.onload = e => { 
+            rawXmlData = e.target.result; 
+            statusBox.innerText = "Geladen: " + file.name;
+            downloadBtn.style.display = "none";
+        };
+        reader.readAsText(file);
+    }
+
+    optimizeBtn.onclick = () => {
+        if (!rawXmlData) { statusBox.innerText = "❌ Keine Datei geladen!"; return; }
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(rawXmlData, "text/xml");
+        const minDistanceMeters = parseFloat(distInput.value);
+        const precision = parseInt(precInput.value);
+        const doRemoveEle = document.getElementById('check-ele').checked;
+        const doMinify = document.getElementById('check-minify').checked;
+
+        let countIn = 0, countOut = 0;
+
+        let newGpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Linz-Optimizer-v8" xmlns="http://www.topografix.com/GPX/1/1">`;
+
+        // Wir iterieren über alle Tracks im Dokument
+        const tracks = xml.getElementsByTagNameNS("*", "trk");
+
+        for (let t = 0; t < tracks.length; t++) {
+            const currentTrk = tracks[t];
+            const trkNameNode = currentTrk.querySelector("name");
+            const trkTypeNode = currentTrk.querySelector("type");
+            
+            newGpx += `\n<trk>`;
+            if (trkNameNode) newGpx += `\n  <name>${trkNameNode.textContent}</name>`;
+            if (trkTypeNode) newGpx += `\n  <type>${trkTypeNode.textContent}</type>`;
+
+            // Segmente innerhalb dieses spezifischen Tracks suchen
+            const segments = currentTrk.getElementsByTagNameNS("*", "trkseg");
+
+            for (let i = 0; i < segments.length; i++) {
+                const pts = Array.from(segments[i].getElementsByTagNameNS("*", "trkpt"));
+                countIn += pts.length;
+
+                if (pts.length > 0) {
+                    newGpx += `\n  <trkseg>`;
+                    let lastLat = null, lastLon = null;
+
+                    pts.forEach((p, idx) => {
+                        const lat = parseFloat(p.getAttribute("lat").replace(',', '.'));
+                        const lon = parseFloat(p.getAttribute("lon").replace(',', '.'));
+                        
+                        let keep = false;
+                        if (idx === 0 || idx === pts.length - 1) {
+                            keep = true;
+                        } else {
+                            const dLat = (lat - lastLat) * 111320;
+                            const dLon = (lon - lastLon) * 111320 * Math.cos(lat * Math.PI / 180);
+                            const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+                            if (dist >= minDistanceMeters) keep = true;
+                        }
+
+                        if (keep) {
+                            newGpx += `\n    <trkpt lat="${lat.toFixed(precision)}" lon="${lon.toFixed(precision)}">`;
+                            if (!doRemoveEle) {
+                                const eleNodes = p.getElementsByTagNameNS("*", "ele");
+                                if (eleNodes.length > 0) {
+                                    const eleVal = eleNodes[0].textContent.replace(',', '.');
+                                    newGpx += `<ele>${Math.round(parseFloat(eleVal))}</ele>`;
+                                }
+                            }
+                            newGpx += `</trkpt>`;
+                            lastLat = lat; lastLon = lon;
+                            countOut++;
+                        }
+                    });
+                    newGpx += `\n  </trkseg>`;
+                }
+            }
+            newGpx += `\n</trk>`;
+        }
+
+        newGpx += `\n</gpx>`;
+        if (doMinify) newGpx = newGpx.replace(/>\s+</g, '><').trim();
+
+        finalXmlString = newGpx;
+        statusBox.innerHTML = `✅ Fertig!<br>Tracks: ${tracks.length} | Punkte: ${countIn} → ${countOut}`;
+        downloadBtn.style.display = "block";
+    };
+
+    downloadBtn.onclick = () => {
+        const blob = new Blob([finalXmlString], {type: "text/xml"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = lastFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+</script>
+
+</body>
+</html>

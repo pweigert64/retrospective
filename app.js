@@ -769,51 +769,81 @@ window.loadGpxTrack = function(idx, shouldZoom = true) {
     const p = photoMarkers[idx];
     const url = `${getAssetBase(p.year)}/${p.gpx}`;
     const rawAct = p.activity?.toLowerCase().trim();
-    // Use COLORS keys directly (ski, hike, etc.)
     const color = COLORS[rawAct] || COLORS['unknown'];
-    map.closePopup();
 
+    // 1. Toggle-Logik
     if (loadedTracks[idx]) {
         map.removeLayer(loadedTracks[idx].group);
         delete loadedTracks[idx];
-        refreshAllMarkerPopups(); // status toggle
+        refreshAllMarkerPopups();
         renderMarkers();
         return;
     }
 
+    // 2. Gruppe erstellen
     const trackGroup = L.featureGroup().addTo(map);
-    const label = L.tooltip({ permanent: true, direction: 'right', offset: [15, 0], className: 'track-label' })
-        .setContent(p.title).setLatLng([p.lat, p.lon]);
+
+    // Label/Tooltip hinzufügen
+    const label = L.tooltip({ 
+        permanent: true, 
+        direction: 'right', 
+        offset: [15, 0], 
+        className: 'track-label' 
+    }).setContent(p.title).setLatLng([p.lat, p.lon]);
     trackGroup.addLayer(label);
 
+    // 3. GPX Layer laden
     const trackLayer = new L.GPX(url, {
         async: true,
         marker_options: { startIconUrl: '', endIconUrl: '' },
-        polyline_options: { color: color, weight: 5, opacity: 0.9, lineJoin: 'round' }
+        polyline_options: { 
+            color: color, 
+            weight: 5, 
+            opacity: 0.9, 
+            lineJoin: 'round',
+            interactive: false // Verhindert, dass die Linie Klicks schluckt
+        }
     }).on('loaded', e => {
-        e.target.eachLayer(layer => {
-            if (layer instanceof L.Polyline) {
-                let dashPattern = p.activity === 'ski' ? '2, 12' : (p.activity === 'hike' || p.activity === 'climb' || p.activity === 'rope' ? '10, 10' : '20, 5');
-                L.polyline(layer.getLatLngs(), { color: '#FFFFFF', weight: 2, opacity: 0.8, dashArray: dashPattern, lineCap: 'round', interactive: false }).addTo(trackGroup);
+        // Rekursive Funktion für alle Unter-Ebenen (wichtig für mehrere <trk>)
+        const addDashes = (l) => {
+            if (l instanceof L.Polyline) {
+                let dashPattern = p.activity === 'ski' ? '2, 12' : 
+                                 (p.activity === 'hike' || p.activity === 'climb' || p.activity === 'rope' ? '10, 10' : '20, 5');
+                
+                // Weiße Dash-Linie erstellen
+                const dashLine = L.polyline(l.getLatLngs(), { 
+                    color: '#FFFFFF', 
+                    weight: 2, 
+                    opacity: 0.8, 
+                    dashArray: dashPattern, 
+                    lineCap: 'round', 
+                    interactive: false 
+                });
+                
+                trackGroup.addLayer(dashLine);
+                // Sicherstellen, dass der farbige Track und der Dash HINTER dem Marker liegen
+                dashLine.bringToBack();
+            } else if (l.eachLayer) {
+                l.eachLayer(addDashes);
             }
-        });
+        };
+
+        addDashes(e.target);
         
-        // IMMEDIATE MOVE: As soon as THIS specific track is ready
+        // Den gesamten GPX-Layer nach hinten schieben
+        e.target.bringToBack();
+
         if (shouldZoom) {
             const b = e.target.getBounds();
             if (b.isValid()) map.flyToBounds(b, { padding: [50, 50] });
-            else map.flyTo([p.lat, p.lon], 15);
         }
         
         loadedTracks[idx] = { group: trackGroup, filename: p.gpx, layer: e.target };
         refreshAllMarkerPopups();
         renderMarkers();
-    }).on('error', () => {
-        if (shouldZoom) map.flyTo([p.lat, p.lon], 15);
     });
 
     trackGroup.addLayer(trackLayer);
-    return trackLayer;
 };
 
 /* -------------------------------------------------------------------------
