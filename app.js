@@ -117,8 +117,27 @@ async function fetchSheetData() {
             return obj;
         });
 
-        // Clean up "undefined" strings in the data immediately after loading
+        // create collection info
+        let lastTripId = null;
+
         photoMarkers = photoMarkers.map(p => {
+            // Falls eine tripid vorhanden ist
+            if (p.tripid && p.tripid !== "") {
+                if (p.tripid !== lastTripId) {
+                    // Dies ist der erste Record mit dieser ID -> Header markieren
+                    p.isCollectionHeader = true;
+                    lastTripId = p.tripid;
+                } else {
+                    // Folge-Record der gleichen ID -> Member
+                    p.isCollectionHeader = false;
+                }
+            } else {
+                // Keine tripid -> Einzelbild, kein Header
+                p.isCollectionHeader = false;
+                lastTripId = null; // Reset für den nächsten Block
+            }
+            
+            // Clean up "undefined" strings in the data immediately after loading
             for (let key in p) {
                 if (p[key] === "undefined" || p[key] === undefined) p[key] = "";
             }
@@ -492,9 +511,8 @@ function createPortalCard(p, idx) {
     // Status helpers
     const hasAlbum = p.album && p.album.startsWith('http');
     const hasLocation = (p.lat && p.lon);
-    const isCollection = (!p.lat || !p.lon) && hasAlbum; 
     
-    const canShowOnMap = hasLocation || isCollection;
+    const canShowOnMap = hasLocation || p.isCollectionHeader;
     
     return `
         <div class="portal-card bg-white shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-all border border-gray-100" data-idx="${idx}">
@@ -525,6 +543,7 @@ function createPortalCard(p, idx) {
     `;
 }
 
+let currentRenderId = 0; // Globaler Counter
 /**--------------------------------------------------------------------
  * Renders the Portal Grid Cards: in batch mode
  *-------------------------------------------------------------------*/
@@ -535,8 +554,14 @@ function renderPortal() {
     container.innerHTML = ''; 
     const targets = getFilteredTours('portal');
 
+    // new renderId to avoid duplicate renderings
+    const myRenderId = ++currentRenderId;
+
     let i = 0;
     function processBatch() {
+        // PRÜFUNG: Wenn eine neuere Render-ID existiert, brich diesen Batch ab
+        if (myRenderId !== currentRenderId) return;
+
         const end = Math.min(i + 12, targets.length);
         let htmlChunk = '';
 
@@ -581,13 +606,13 @@ function jumpToMap(indices) {
             if (!p) return;
 
             // CHECK: Ist es ein Collection-Header?
-            if ((!p.lat || !p.lon) && p.album && p.album.startsWith('http')) {
+            if (p.isCollectionHeader) {
                 // Nur verarbeiten, wenn wir dieses Album in diesem Durchlauf noch nicht hatten
                 if (!processedAlbums.has(p.album)) {
                     processedAlbums.add(p.album);
                     
                     // Alle Marker dieses Albums finden
-                    const albumSiblings = photoMarkers.filter(m => m.album === p.album);
+                    const albumSiblings = photoMarkers.filter(m => m.tripid === p.tripid);
                     
                     // Koordinaten-Marker zur Liste hinzufügen
                     albumSiblings.forEach(s => {
@@ -868,20 +893,13 @@ function getFilteredTours(targetView = 'map') {
         return filtered.filter(p => p.lat && p.lon);
     }
 
-    // PORTAL LOGIC: Hide duplicates to show only the "Ghost" (Collection Header)
-    const seenCollectionAlbums = new Set();
+    // now targetView !==  'map' PORTAL LOGIC: Hide childs of collection
     return filtered.filter(p => {
-        // If no album is provided, always show the card
-        if (!p.album || p.album === "" || p.album === "#") return true;
+        // discarded => If no album is provided, always show the card
+        //if (!p.album || p.album === "" || p.album === "#") return true;
         
-        // If we've already seen this album URL, hide this row
-        if (seenCollectionAlbums.has(p.album)) return false;
-        
-        // Register collectionalbum w.o. coordinatesand show this first row (the Ghost/Header)
-        if (!(p.lat && p.lon)) {
-            seenCollectionAlbums.add(p.album);
-        }
-        return true;
+        // filter childs of collection
+        return !p.tripid || p.isCollectionHeader;
     });
 }
 

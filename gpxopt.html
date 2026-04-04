@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Linz GPX-Schredder (v8 - Multi-Track Safe)</title>
+    <title>GPX-Optimize</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; color: #1a1a1a; max-width: 850px; margin: 0 auto; }
         .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
@@ -104,7 +104,7 @@
 
         let countIn = 0, countOut = 0;
 
-        let newGpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Linz-Optimizer-v8" xmlns="http://www.topografix.com/GPX/1/1">`;
+        let newGpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Gpx-Optimizer" xmlns="http://www.topografix.com/GPX/1/1">`;
 
         // Wir iterieren über alle Tracks im Dokument
         const tracks = xml.getElementsByTagNameNS("*", "trk");
