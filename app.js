@@ -3,7 +3,7 @@ document.getElementById('current-year-label').textContent = myTitle;
 
 const COLORS = { 
     'ski': '#4f46e5', 'hike': '#b54708', 'climb': '#dc2626', 
-    'bike': '#065f46', 'bike+hike': '#f97316', 'trip': '#9333ea', 'unknown': '#6b7280' 
+    'bike': '#024302', 'bike+hike': '#f97316', 'trip': '#9333ea', 'unknown': '#6b7280' 
 };
 const ICONS_MAP = { 
     'ski': '❄️', 'piste': '🚠', 'hike': '🥾', 'climb': '⛰️', 'rope': '🧗', 'bike': '🚴', 'bike+hike': '🚵', 'trip': '🏛️' 
@@ -830,6 +830,39 @@ window.loadGpxTrack = function(idx, shouldZoom = true) {
         }
     }).on('loaded', e => {
         // Rekursive Funktion für alle Unter-Ebenen (wichtig für mehrere <trk>)
+        const addDirectionalArrows = (l) => {
+            if (l instanceof L.Polyline) {
+                // Wir erstellen keine dashLine mehr, sondern nutzen nur den Decorator
+               const arrows = L.polylineDecorator(l, {
+                    patterns: [
+                        {
+                            repeat: 30,     // Alle <repeat> Pixel ein Pfeil (kleinerer Wert = mehr Pfeile)
+                            symbol: L.Symbol.arrowHead({
+                                pixelSize: 3.9, 
+                                polygon: false,
+                                pathOptions: { 
+                                    color: '#FFFFFF', 
+                                    weight: 1.8, 
+                                    fillOpacity: 1,
+                                    opacity: 1,
+                                    interactive: false // click 
+                                }
+                            })
+                        }
+                    ]
+                });
+                
+                trackGroup.addLayer(arrows);
+                
+                // Optional: Den Decorator ganz nach hinten schieben, 
+                // damit Marker immer oben liegen
+                arrows.bringToBack(); 
+                
+            } else if (l.eachLayer) {
+                l.eachLayer(addDirectionalArrows);
+            }
+        };
+        /*****
         const addDashes = (l) => {
             if (l instanceof L.Polyline) {
                 let dashPattern = p.activity === 'ski' ? '2, 12' : 
@@ -854,6 +887,8 @@ window.loadGpxTrack = function(idx, shouldZoom = true) {
         };
 
         addDashes(e.target);
+        *****/
+       addDirectionalArrows(e.target);
         
         // Den gesamten GPX-Layer nach hinten schieben
         e.target.bringToBack();

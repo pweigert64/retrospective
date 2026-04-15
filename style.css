@@ -80,6 +80,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     -ms-overflow-style: none;  /* IE/Edge */
     scrollbar-width: none;     /* Firefox */
 }
+
+#header-filter-bar {
+    margin-right: auto; /* Schiebt alles nachfolgende weg */
+    margin-left: 30px;  /* Abstand zum Year-Titel links */
+    display: flex;
+    gap: 8px;           /* Abstand zwischen den einzelnen runden Buttons */
+}
+
 #header-filter-bar::-webkit-scrollbar {
     display: none;             /* Chrome/Safari */
 }
