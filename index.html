@@ -40,35 +40,57 @@
 				<div id="current-year-label" class="font-bold text-slate-500 tracking-normal italic"></div>
 			 </button>
 
-			 <div class="flex items-center gap-1 overflow-x-auto no-scrollbar ml-auto min-w-0" id="header-filter-bar">
-				<button class="filter-button filter-button-active" data-activity="ski">❄️</button>
-				<button class="filter-button filter-button-active" data-activity="piste">🚠</button>
-				<button class="filter-button filter-button-active" data-activity="hike">🥾</button>
-				<button class="filter-button filter-button-active" data-activity="climb">⛰️</button>
-				<button class="filter-button filter-button-active" data-activity="rope">🧗</button>
-				<button class="filter-button filter-button-active" data-activity="bike">🚴</button>
-				<button class="filter-button filter-button-active" data-activity="bike+hike">🚵</button>
-				<button class="filter-button filter-button-active" data-activity="trip">🏛️</button>
-			 </div>
              <div class="flex gap-2 bg-gray-100 p-1 rounded-xl">
                 <button onclick="switchView('portal')" id="nav-portal" class="px-2 py-2 rounded-lg bg-white shadow-sm text-2xl">🗓️</button>
                 <button onclick="switchView('map',true)" id="nav-map" class="px-2 py-2 rounded-lg opacity-50 text-2xl">🗺️</button>
              </div>
         </header>
 
-		<div id="txtSearchToolbar" class="hidden bg-white border-b px-4 py-2 flex items-center gap-3 shadow-sm z-[1001]">
-			<input type="search" id="txtSearchInput" 
-				placeholder="search..." 
-				class="flex-1 p-2 bg-gray-100 rounded-lg outline-none focus:ring-1 focus:ring-slate-300"
-				onkeydown="if(event.key==='Enter') handleSearch(this.value, true)"
-				oninput="handleTxtSearch(this.value)">
-			<button class="go-btn" onclick="handleTxtSearch(document.getElementById('txtSearchInput').value,true)" class="text-slate-400 text-sm">GO</button>
+
+		<div id="txtSearchToolbar" class="hidden bg-white border-b px-4 py-3 flex flex-col gap-4 shadow-sm z-[1001]">
+			<!-- LINE 1: Filters -->
+			<div class="flex flex-col gap-1.5">
+				<!-- "Filter:" label is now always visible and left-aligned -->
+				<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Aktivität Filter:</span>
+				
+				<div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1" id="header-filter-bar">
+					<button class="filter-button filter-button-active" data-activity="ski">❄️</button>
+					<button class="filter-button filter-button-active" data-activity="piste">🚠</button>
+					<button class="filter-button filter-button-active" data-activity="hike">🥾</button>
+					<button class="filter-button filter-button-active" data-activity="climb">⛰️</button>
+					<button class="filter-button filter-button-active" data-activity="rope">🧗</button>
+					<button class="filter-button filter-button-active" data-activity="bike">🚴</button>
+					<button class="filter-button filter-button-active" data-activity="bike+hike">🚵</button>
+					<button class="filter-button filter-button-active" data-activity="trip">🏛️</button>
+				</div>
+			</div>
+
+			<!-- LINE 2: Search Input -->
+			<div class="flex flex-col gap-1">
+				<div class="flex items-center gap-2">
+					<div class="relative flex-1">
+						<input type="search" id="txtSearchInput" 
+							placeholder="Gipfel, Region oder Tags..." 
+							class="w-full p-2.5 bg-gray-100 rounded-lg outline-none focus:ring-2 focus:ring-slate-300 text-sm pl-9"
+							oninput="handleTxtSearch(this.value)">
+						<!-- Optional: Magnifying glass icon for better UX -->
+						<span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+					</div>
+					
+					<button onclick="handleTxtSearch(document.getElementById('txtSearchInput').value, true)" 
+							class="bg-slate-800 text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-700 active:scale-95 transition-all shrink-0">
+						GO
+					</button>
+				</div>
+				<span class="text-[10px] text-slate-400 italic px-1">Achtung: Jahrfilter ist immer aktiv!</span>
+			</div>
 		</div>
+
 		<main class="flex-1 overflow-hidden relative">
 			<section id="portal-view">
 				<div id="portal-grid" 
 					class="grid gap-4 w-full max-w-[2400px] mx-auto" 
-					style="grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));">
+					style="grid-template-columns: repeat(auto-fill, minmax(min(100%, 450px), 1fr));">
 				</div>
 			</section>
 
