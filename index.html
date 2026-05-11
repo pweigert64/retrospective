@@ -101,18 +101,19 @@
 						<div id="map-panel" class="pop-out-panel">
 							<div class="bg-indigo-50 p-3 rounded-lg flex flex-col gap-2 text-[10px] font-bold">
 								<div class="flex justify-between border-b border-indigo-200 pb-1 text-indigo-600">
-									<span class="uppercase">Zoom</span>
+									<span class="uppercase">Actual Zoom Level</span>
 									<span id="zoom-level-display">11</span>
 								</div>
-								<div class="flex justify-between">
-									<span>SWITCH AT:</span>
-									<span id="threshold-display">16</span>
-								</div>
-								<input type="range" id="threshold-slider" min="1" max="17" value="16" step="1" class="w-full">
-							</div>
-							<div class="grid grid-cols-2 gap-2 mt-1">
-								<button id="hike-layer-btn" class="filter-button bg-white text-[9px] py-2">🥾 HIKE</button>
-								<button id="bike-layer-btn" class="filter-button bg-white text-[9px] py-2">🚲 MTB</button>
+
+								<!-- Map Provider Selection Grid -->
+								<div class="grid grid-cols-1 gap-2">
+									<button onclick="changeBaseLayer('opentopo')" class="filter-button base-layer-btn bg-white text-[9px] py-2" id="btn-opentopo">Open Topo Map</button>
+									<button onclick="changeBaseLayer('maptiler')" class="filter-button base-layer-btn bg-white text-[9px] py-2" id="btn-maptiler">Map Tiler</button>
+									<button onclick="changeBaseLayer('osm')" class="filter-button base-layer-btn bg-white text-[9px] py-2" id="btn-osm">Open Street Map</button>
+									<button onclick="changeBaseLayer('sat_esri')" class="filter-button base-layer-btn bg-white text-[9px] py-2" id="btn-sat_esri">🛰️ SAT Esri</button>
+									<button onclick="changeBaseLayer('sat_maptiler')" class="filter-button base-layer-btn bg-white text-[9px] py-2" id="btn-sat_maptiler">🛰️ SAT Maptiler(Hybrid)</button>
+									<button onclick="changeBaseLayer('sat_google')" class="filter-button base-layer-btn bg-white text-[9px] py-2" id="btn-sat_google">🛰️ SAT Google(Hybrid)</button>
+								</div>							
 							</div>
 						</div>
 					</div>

@@ -13,7 +13,7 @@ let map, overviewLayer, detailLayer, hikingLayer, cyclingLayer;
 let photoMarkers = [], currentMarkers = [], allMarkers = [], loadedTracks = {}; 
 let activeFilters = { ski: true, piste: true, hike: true, climb: true, rope: true, bike: true, 'bike+hike': true, trip: true, unknown: true };
 let activeTxtSearch = '';
-let activeYear = 'All', isInitialLoad = true, switchThreshold = 16; 
+let activeYear = 'All', isInitialLoad = true; 
 let MAPTILER_KEY, SHEETS_CSV_URL;
 let typingTimer;               // Timer for real-time debounce (hesitate with immediate search)
 const doneTypingInterval = 1200; // Wait ###ms after typing stops
@@ -181,32 +181,86 @@ async function fetchSheetData() {
 }
 
 /* -------------------------------------------------------------------------
- * INIT MAP define layers, place the appropriate map (overview or detail).
+ * INIT MAP define layers, place the appropriate map
  * ------------------------------------------------------------------------*/
 function initMap() {
-    // Start at a generic point 
-    // because we will immediately 'fly' to the right spot in the next step.
-    const startPos = [48.18, 14.17]; // Linz/Donau
+    const startPos = [48.18, 14.17]; 
     map = L.map('map', { center: startPos, zoom: 11, zoomControl: false });
     
-    overviewLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 }).addTo(map);
-    detailLayer = L.tileLayer(`https://api.maptiler.com/maps/outdoor-v4/{z}/{x}/{y}@2x.png?key=${MAPTILER_KEY}`, { tileSize: 512, zoomOffset: -1, maxZoom: 19 });
-    
-    hikingLayer = L.tileLayer('https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png');
-    cyclingLayer = L.tileLayer('https://tile.waymarkedtrails.org/mtb/{z}/{x}/{y}.png');
+    // Define all available base layers
+    baseLayers = {
+        'opentopo': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { 
+            maxZoom: 17, 
+            attribution: '&copy; OpenTopoMap' 
+        }),
+        'maptiler': L.tileLayer(`https://api.maptiler.com/maps/outdoor-v4/{z}/{x}/{y}@2x.png?key=${MAPTILER_KEY}`, { 
+            tileSize: 512, zoomOffset: -1, maxZoom: 19, 
+            attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>' 
+        }),
+        'osm': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+            maxZoom: 19, 
+            attribution: '&copy; OpenStreetMap' 
+        }),
+        'sat_esri': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
+            maxZoom: 19, 
+            attribution: '&copy; Esri'
+        }),
+        'sat_maptiler': L.tileLayer(`https://api.maptiler.com/maps/hybrid-v4/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`, {
+            tileSize: 512,
+            zoomOffset: -1,
+            maxZoom: 19,
+            attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>'
+        }),
+        'sat_google': L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            attribution: '&copy; Google'
+        })
+    };
 
+    // Define Overlays (Waymarked Trails)
+    overlays = {
+        'hike': L.tileLayer('https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png'),
+        'bike': L.tileLayer('https://tile.waymarkedtrails.org/mtb/{z}/{x}/{y}.png')
+    };
+
+    // Set the initial base layer
+    changeBaseLayer('opentopo');
+
+    // Simple zoom display update
     map.on('zoomend', () => {
-        const currentZoom = map.getZoom();
-        document.getElementById('zoom-level-display').innerText = currentZoom;
-        if (currentZoom >= switchThreshold) {
-            if (!map.hasLayer(detailLayer)) { detailLayer.addTo(map); map.removeLayer(overviewLayer); }
-        } else {
-            if (!map.hasLayer(overviewLayer)) { overviewLayer.addTo(map); map.removeLayer(detailLayer); }
-        }
+        document.getElementById('zoom-level-display').innerText = map.getZoom();
     });
 
     setupEvents();
     renderMarkers();
+}
+
+/* -------------------------------------------------------------------------
+ * Change the shown map as of the selected button.
+ * ------------------------------------------------------------------------*/
+function changeBaseLayer(layerKey) {
+    // 1. Remove the current active base layer from the map
+    Object.keys(baseLayers).forEach(key => {
+        if (map.hasLayer(baseLayers[key])) {
+            map.removeLayer(baseLayers[key]);
+        }
+    });
+
+    // 2. Add the selected layer
+    baseLayers[layerKey].addTo(map);
+    currentBaseLayer = layerKey;
+
+    // 3. Update the UI - Remove 'active' class from ALL, add to CLICKED
+    document.querySelectorAll('.base-layer-btn').forEach(btn => {
+        btn.classList.remove('filter-button-active');
+        btn.classList.add('bg-white'); // Return to default
+    });
+
+    const activeBtn = document.getElementById('btn-' + layerKey);
+    if (activeBtn) {
+        activeBtn.classList.add('filter-button-active');
+        activeBtn.classList.remove('bg-white');
+    }
 }
 
 /* -------------------------------------------------------------------------
@@ -773,18 +827,6 @@ function setupEvents() {
                 executeSearch(activeTxtSearch,false); // use the search function to refresh views without changing the search term
             };
         });
-    document.getElementById('hike-layer-btn').onclick = function() {
-        map.hasLayer(hikingLayer) ? map.removeLayer(hikingLayer) : hikingLayer.addTo(map);
-        this.classList.toggle('filter-button-active');
-    };
-    document.getElementById('bike-layer-btn').onclick = function() {
-        map.hasLayer(cyclingLayer) ? map.removeLayer(cyclingLayer) : cyclingLayer.addTo(map);
-        this.classList.toggle('filter-button-active');
-    };
-    document.getElementById('threshold-slider').oninput = (e) => {
-        switchThreshold = parseFloat(e.target.value);
-        document.getElementById('threshold-display').innerText = switchThreshold;
-    };
 }
 
 /* -------------------------------------------------------------------------
@@ -904,6 +946,8 @@ window.loadGpxTrack = function(idx, shouldZoom = true) {
     });
 
     trackGroup.addLayer(trackLayer);
+
+    return trackLayer; // for showAllTracks()
 };
 
 /* -------------------------------------------------------------------------
@@ -1071,23 +1115,25 @@ window.showAllTracks = function() {
         const idx = photoMarkers.indexOf(p);
         
         if (loadedTracks[idx]) {
-            // Already there? Just add its bounds to the master box
             const b = loadedTracks[idx].group.getBounds();
             if (b.isValid()) runningBounds.extend(b);
             finalizeMasterView();
         } else {
-            // New? Load it and extend view cumulatively
             const track = loadGpxTrack(idx, false); 
-            track.on('loaded', e => {
-                const gb = e.target.getBounds();
-                if (gb.isValid()) {
-                    runningBounds.extend(gb);
-                    // Cumulative "stretching" move
-                    map.flyToBounds(runningBounds, { padding: [50, 50], duration: 1.5 }); //0.8 ?
-                }
+            
+            if (track) {
+                track.on('loaded', e => {
+                    // Now we know it's safe to grab the bounds
+                    const gb = e.target.getBounds();
+                    if (gb.isValid()) {
+                        runningBounds.extend(gb);
+                    }
+                    finalizeMasterView();
+                });
+                track.on('error', () => finalizeMasterView());
+            } else {
                 finalizeMasterView();
-            });
-            track.on('error', () => finalizeMasterView());
+            }
         }
     });
 };
