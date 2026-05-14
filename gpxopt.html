@@ -1,27 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
+    <meta charset="UTF-8">
     <title>GPX-Optimize</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; color: #1a1a1a; max-width: 850px; margin: 0 auto; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #f0f2f5; max-width: 850px; margin: 0 auto; }
         .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         h2 { text-align: center; color: #2563eb; margin-top: 0; }
         #drop-zone { border: 3px dashed #3b82f6; padding: 40px; text-align: center; background: #f8fafc; cursor: pointer; border-radius: 8px; margin-bottom: 20px; transition: 0.2s; }
         #drop-zone.hover { background: #dbeafe; border-color: #1d4ed8; }
         .control-panel { background: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
-        .row { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+        .row { display: flex; align-items: center; gap: 15px; margin-bottom: 12px; }
         .label { font-weight: 600; width: 220px; }
-        input[type="range"] { flex-grow: 1; cursor: pointer; }
-        input[type="number"] { width: 70px; padding: 5px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: monospace; font-size: 1em; }
-        .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em; margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
-        .status-box { text-align: center; margin: 20px 0; font-weight: bold; color: #475569; min-height: 1.2em; border: 1px solid #cbd5e1; padding: 15px; border-radius: 6px; background: #fff; line-height: 1.6; }
-        .btn { display: block; width: 100%; padding: 15px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-bottom: 10px; }
+        input[type="number"] { width: 70px; padding: 5px; border: 1px solid #cbd5e1; border-radius: 4px; }
+        .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9em; border-top: 1px solid #e2e8f0; padding-top: 15px; margin-top: 10px; }
+        .status-box { text-align: center; margin: 20px 0; font-weight: bold; color: #475569; border: 1px solid #cbd5e1; padding: 15px; border-radius: 6px; background: #fff; min-height: 1.5em; }
+        .btn { display: block; width: 100%; padding: 15px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 10px; transition: 0.2s; }
         #optimize-btn { background: #3b82f6; color: white; }
-        #optimize-btn:hover { background: #1d4ed8; }
-        #download-btn { background: #10b981; color: white; display: none; }
-        #copy-btn { background: #64748b; color: white; display: none; font-size: 0.9em; padding: 10px; }
-        .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-        .size-info { font-size: 0.85em; color: #64748b; margin-top: 5px; font-weight: normal; }
+        #copy-btn { background: #64748b; color: white; }
+        #download-btn { background: #10b981; color: white; }
+        #save-as-btn { background: #8b5cf6; color: white; }
+        #quick-save-btn { background: #f59e0b; color: white; display: none; }
+        .size-info { font-size: 0.85em; color: #64748b; font-weight: normal; margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -34,150 +34,144 @@
 
     <div class="control-panel">
         <div class="row">
-            <span class="label">Min. Punkt-Abstand [m]:</span>
-            <input type="range" id="dist-slider" min="1" max="2000" value="10">
-            <input type="number" id="dist-input" min="1" max="2000" value="10">
+            <span class="label">Min. Abstand [m]:</span>
+            <input type="number" id="dist-input" value="10">
         </div>
         <div class="row">
-            <span class="label">Lat/Lon Nachkomma(3-7):</span>
-            <input type="range" id="prec-slider" min="3" max="7" value="5">
-            <input type="number" id="prec-input" min="3" max="7" value="5">
+            <span class="label">Nachkomma (Lat/Lon):</span>
+            <input type="number" id="prec-input" value="5">
         </div>
         <div class="options">
-            <label class="checkbox-label"><input type="checkbox" id="check-time"> Zeitstempel löschen</label>
-            <label class="checkbox-label"><input type="checkbox" id="check-ele"> Höhe komplett löschen</label>
-            <label class="checkbox-label"><input type="checkbox" id="check-garbage" checked> Metadaten löschen</label>
-            <label class="checkbox-label"><input type="checkbox" id="check-minify" > XML komprimieren</label>
+            <label><input type="checkbox" id="check-time"> Zeit löschen</label>
+            <label><input type="checkbox" id="check-ele"> Höhe löschen</label>
+            <label><input type="checkbox" id="check-garbage" checked> Metadaten weg</label>
+            <label><input type="checkbox" id="check-minify"> Komprimieren</label>
         </div>
     </div>
 
     <button id="optimize-btn" class="btn">Datei jetzt optimieren</button>
-    
     <div id="status-box" class="status-box">Bereit.</div>
 
-    <button id="copy-btn" class="btn">Filename in Zwischenablage kopieren</button>
-    <button id="download-btn" class="btn">Optimiertes GPX speichern</button>
+    <div class="action-area" style="margin-top: 20px; border-top: 2px solid #e2e8f0; padding-top: 20px;">
+        <button id="copy-btn" class="btn">Filename kopieren (Warte auf Datei...)</button>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <button id="download-btn" class="btn">Download</button>
+            <button id="save-as-btn" class="btn">Ziel wählen</button>
+        </div>
+        <button id="quick-save-btn" class="btn">Speichern in: <span id="dir-name">...</span></button>
+    </div>
 </div>
 
 <script>
-    const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
-    const distSlider = document.getElementById('dist-slider');
-    const distInput = document.getElementById('dist-input');
-    const precSlider = document.getElementById('prec-slider');
-    const precInput = document.getElementById('prec-input');
-    const optimizeBtn = document.getElementById('optimize-btn');
-    const downloadBtn = document.getElementById('download-btn');
+    const dropZone = document.getElementById('drop-zone');
     const copyBtn = document.getElementById('copy-btn');
     const statusBox = document.getElementById('status-box');
+    const quickSaveBtn = document.getElementById('quick-save-btn');
 
     let rawXmlData = "";
-    let originalSize = 0;
-    let lastFileName = "";
-    let finalFileName = "";
     let finalXmlString = "";
+    let originalSize = 0;
+    let directoryHandle = null;
+    let globalStoredFileName = ""; // Sicherheits-Variable
 
-    distSlider.oninput = () => { distInput.value = distSlider.value; };
-    distInput.oninput = () => { distSlider.value = distInput.value; };
-    precSlider.oninput = () => { precInput.value = precSlider.value; };
-    precInput.oninput = () => { precSlider.value = precInput.value; };
+    // --- AUTOMATISCHE REPARATUR ---
+    // Stellt sicher, dass der Name niemals verloren geht
+    setInterval(() => {
+        const stored = sessionStorage.getItem('lastGpxName') || globalStoredFileName;
+        if (stored && !copyBtn.innerText.includes(stored)) {
+            copyBtn.innerText = "Filename kopieren: " + stored;
+        }
+    }, 500);
 
+    // --- DATEI LADEN ---
     dropZone.onclick = () => fileInput.click();
-    fileInput.onchange = e => handleFile(e.target.files[0]);
-    dropZone.ondragover = e => { e.preventDefault(); dropZone.classList.add('hover'); };
-    dropZone.ondragleave = () => dropZone.classList.remove('hover');
-    dropZone.ondrop = e => { e.preventDefault(); dropZone.classList.remove('hover'); handleFile(e.dataTransfer.files[0]); };
+    fileInput.onchange = (e) => { if(e.target.files[0]) handleFile(e.target.files[0]); };
 
-    function formatBytes(bytes) {
-        if (bytes < 1024) return bytes + " B";
-        else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
-        else return (bytes / 1048576).toFixed(1) + " MB";
-    }
+    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('hover'); };
+    dropZone.ondragleave = () => { dropZone.classList.remove('hover'); };
+    dropZone.ondrop = (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('hover');
+        if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    };
 
     function handleFile(file) {
-        if (!file) return;
-        lastFileName = file.name;
         originalSize = file.size;
         const reader = new FileReader();
-        reader.onload = e => { 
-            rawXmlData = e.target.result; 
-            statusBox.innerHTML = `Datei geladen: ${file.name}<br><span class="size-info">Originalgröße: ${formatBytes(originalSize)}</span>`;
-            downloadBtn.style.display = "none";
-            copyBtn.style.display = "none";
+        reader.onload = (e) => {
+            rawXmlData = e.target.result;
+            const newName = file.name.replace(/^track_20(\d{6})_\d{6}_/i, '$1_');
+            
+            // DREIFACHE SICHERUNG
+            globalStoredFileName = newName;
+            sessionStorage.setItem('lastGpxName', newName);
+            copyBtn.innerText = "Filename kopieren: " + newName;
+            
+            statusBox.innerHTML = `Geladen: ${file.name} <br> <span class="size-info">Größe: ${(originalSize/1024).toFixed(1)} KB</span>`;
         };
         reader.readAsText(file);
     }
 
-    optimizeBtn.onclick = () => {
-        if (!rawXmlData) { statusBox.innerText = "❌ Keine Datei geladen!"; return; }
+    // --- OPTIMIERUNG ---
+    document.getElementById('optimize-btn').onclick = () => {
+        if (!rawXmlData) return alert("Bitte zuerst eine Datei laden!");
         
         const parser = new DOMParser();
         const xml = parser.parseFromString(rawXmlData, "text/xml");
-        const minDistanceMeters = parseFloat(distInput.value);
-        const precision = parseInt(precInput.value);
-        const doRemoveEle = document.getElementById('check-ele').checked;
-        const doRemoveTime = document.getElementById('check-time').checked;
+        const minDist = parseFloat(document.getElementById('dist-input').value);
+        const prec = parseInt(document.getElementById('prec-input').value);
+        const doTime = document.getElementById('check-time').checked;
+        const doEle = document.getElementById('check-ele').checked;
         const doMinify = document.getElementById('check-minify').checked;
 
-        let countIn = 0, countOut = 0;
-        let newGpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Gpx-Optimizer" xmlns="http://www.topografix.com/GPX/1/1">`;
+        let ptsIn = 0, ptsOut = 0;
+        let newGpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="GPX-Pro" xmlns="http://www.topografix.com/GPX/1/1">`;
 
-        // Process Helper for points (handles both trkpt and rtept)
-        const processPoints = (pts, tagName) => {
-            let buffer = "";
+        const filterPoints = (pts, tag) => {
+            let res = "";
             let lastLat = null, lastLon = null;
-            const ptsArray = Array.from(pts);
-            countIn += ptsArray.length;
+            const arr = Array.from(pts);
+            ptsIn += arr.length;
 
-            ptsArray.forEach((p, idx) => {
-                const lat = parseFloat(p.getAttribute("lat").replace(',', '.'));
-                const lon = parseFloat(p.getAttribute("lon").replace(',', '.'));
-                
-                let keep = false;
-                if (idx === 0 || idx === ptsArray.length - 1) {
-                    keep = true;
-                } else {
+            arr.forEach((p, i) => {
+                const lat = parseFloat(p.getAttribute("lat"));
+                const lon = parseFloat(p.getAttribute("lon"));
+                let keep = (i === 0 || i === arr.length - 1);
+
+                if (!keep && lastLat !== null) {
                     const dLat = (lat - lastLat) * 111320;
                     const dLon = (lon - lastLon) * 111320 * Math.cos(lat * Math.PI / 180);
-                    const dist = Math.sqrt(dLat * dLat + dLon * dLon);
-                    if (dist >= minDistanceMeters) keep = true;
+                    if (Math.sqrt(dLat * dLat + dLon * dLon) >= minDist) keep = true;
                 }
 
                 if (keep) {
-                    buffer += `\n    <${tagName} lat="${lat.toFixed(precision)}" lon="${lon.toFixed(precision)}">`;
-                    if (!doRemoveEle) {
-                        const eleNodes = p.getElementsByTagNameNS("*", "ele");
-                        if (eleNodes.length > 0) buffer += `<ele>${Math.round(parseFloat(eleNodes[0].textContent.replace(',', '.')))}</ele>`;
+                    res += `\n    <${tag} lat="${lat.toFixed(prec)}" lon="${lon.toFixed(prec)}">`;
+                    if (!doEle) {
+                        const e = p.getElementsByTagName("ele")[0];
+                        if (e) res += `<ele>${Math.round(parseFloat(e.textContent))}</ele>`;
                     }
-                    if (!doRemoveTime) {
-                        const timeNodes = p.getElementsByTagNameNS("*", "time");
-                        if (timeNodes.length > 0) buffer += `<time>${timeNodes[0].textContent}</time>`;
+                    if (!doTime) {
+                        const t = p.getElementsByTagName("time")[0];
+                        if (t) res += `<time>${t.textContent}</time>`;
                     }
-                    buffer += `</${tagName}>`;
+                    res += `</${tag}>`;
                     lastLat = lat; lastLon = lon;
-                    countOut++;
+                    ptsOut++;
                 }
             });
-            return buffer;
+            return res;
         };
 
-        // 1. Tracks
-        const tracks = xml.getElementsByTagNameNS("*", "trk");
+        const tracks = xml.getElementsByTagName("trk");
         for (let t = 0; t < tracks.length; t++) {
-            const name = tracks[t].querySelector("name")?.textContent;
-            newGpx += `\n<trk>${name ? `\n  <name>${name}</name>` : ""}`;
-            const segments = tracks[t].getElementsByTagNameNS("*", "trkseg");
-            for (let s = 0; s < segments.length; s++) {
-                newGpx += `\n  <trkseg>${processPoints(segments[s].getElementsByTagNameNS("*", "trkpt"), "trkpt")}\n  </trkseg>`;
+            const trkName = tracks[t].getElementsByTagName("name")[0]?.textContent;
+            newGpx += `\n<trk>${trkName ? `\n  <name>${trkName}</name>` : ""}`;
+            const segs = tracks[t].getElementsByTagName("trkseg");
+            for (let s = 0; s < segs.length; s++) {
+                newGpx += `\n  <trkseg>${filterPoints(segs[s].getElementsByTagName("trkpt"), "trkpt")}\n  </trkseg>`;
             }
             newGpx += `\n</trk>`;
-        }
-
-        // 2. Routes
-        const routes = xml.getElementsByTagNameNS("*", "rte");
-        for (let r = 0; r < routes.length; r++) {
-            const name = routes[r].querySelector("name")?.textContent;
-            newGpx += `\n<rte>${name ? `\n  <name>${name}</name>` : ""}${processPoints(routes[r].getElementsByTagNameNS("*", "rtept"), "rtept")}\n</rte>`;
         }
 
         newGpx += `\n</gpx>`;
@@ -185,42 +179,52 @@
 
         finalXmlString = newGpx;
         const newSize = new Blob([finalXmlString]).size;
-        const reduction = ((1 - newSize / originalSize) * 100).toFixed(1);
+        const red = ((1 - newSize / originalSize) * 100).toFixed(1);
 
-        // Filename cleaning logic
-        finalFileName = lastFileName.replace(/^track_20(\d{6})_\d{6}_/i, '$1_');
-
-        statusBox.innerHTML = `✅ Fertig!<br>
-            Punkte: ${countIn} → ${countOut}<br>
-            <span class="size-info">Dateigröße: ${formatBytes(originalSize)} → ${formatBytes(newSize)} (<b>-${reduction}%</b>)</span>`;
-        
-        downloadBtn.style.display = "block";
-        copyBtn.style.display = "block";
-        copyBtn.innerText = `Filename kopieren: ${finalFileName}`;
+        statusBox.innerHTML = `✅ Optimiert! <br> Punkte: ${ptsIn} → ${ptsOut} <br> <span class="size-info">Ersparnis: -${red}% (${(newSize/1024).toFixed(1)} KB)</span>`;
     };
 
+    // --- COPY BUTTON ---
     copyBtn.onclick = () => {
-        navigator.clipboard.writeText(finalFileName).then(() => {
-            const oldText = copyBtn.innerText;
-            copyBtn.innerText = "✅ Kopiert!";
-            copyBtn.style.background = "#10b981";
-            setTimeout(() => { 
-                copyBtn.innerText = oldText; 
-                copyBtn.style.background = "#64748b";
-            }, 2000);
+        const name = sessionStorage.getItem('lastGpxName') || globalStoredFileName;
+        if (!name) return;
+        navigator.clipboard.writeText(name).then(() => {
+            const old = copyBtn.innerText;
+            copyBtn.innerText = "✅ KOPIERT!";
+            setTimeout(() => { copyBtn.innerText = old; }, 1200);
         });
     };
 
-    downloadBtn.onclick = () => {
-        const blob = new Blob([finalXmlString], {type: "text/xml"});
-        const url = URL.createObjectURL(blob);
+    // --- SPEICHERN ---
+    document.getElementById('download-btn').onclick = () => {
+        if (!finalXmlString) return alert("Zuerst optimieren!");
+        const name = sessionStorage.getItem('lastGpxName') || globalStoredFileName;
+        const b = new Blob([finalXmlString], {type: "text/xml"});
         const a = document.createElement("a");
-        a.href = url;
-        a.download = finalFileName;
+        a.href = URL.createObjectURL(b);
+        a.download = name;
         a.click();
-        URL.revokeObjectURL(url);
     };
-</script>
 
+    document.getElementById('save-as-btn').onclick = async () => {
+        try {
+            directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            await performSave();
+            quickSaveBtn.style.display = "block";
+            document.getElementById('dir-name').innerText = directoryHandle.name;
+        } catch (e) {}
+    };
+
+    quickSaveBtn.onclick = async () => { if(directoryHandle) await performSave(); };
+
+    async function performSave() {
+        const name = sessionStorage.getItem('lastGpxName') || globalStoredFileName;
+        const handle = await directoryHandle.getFileHandle(name, { create: true });
+        const writable = await handle.createWritable();
+        await writable.write(finalXmlString);
+        await writable.close();
+        statusBox.innerHTML += `<br><span style="color: #10b981;">💾 Gespeichert!</span>`;
+    }
+</script>
 </body>
 </html>
