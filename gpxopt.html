@@ -14,13 +14,14 @@
         input[type="range"] { flex-grow: 1; cursor: pointer; }
         input[type="number"] { width: 70px; padding: 5px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: monospace; font-size: 1em; }
         .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.95em; margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
-        .status-box { text-align: center; margin: 20px 0; font-weight: bold; color: #475569; min-height: 1.2em; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #fff; }
-        .btn { display: block; width: 100%; padding: 15px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
-        #optimize-btn { background: #3b82f6; color: white; margin-bottom: 10px; }
+        .status-box { text-align: center; margin: 20px 0; font-weight: bold; color: #475569; min-height: 1.2em; border: 1px solid #cbd5e1; padding: 15px; border-radius: 6px; background: #fff; line-height: 1.6; }
+        .btn { display: block; width: 100%; padding: 15px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-bottom: 10px; }
+        #optimize-btn { background: #3b82f6; color: white; }
         #optimize-btn:hover { background: #1d4ed8; }
         #download-btn { background: #10b981; color: white; display: none; }
-        #download-btn:hover { background: #059669; }
+        #copy-btn { background: #64748b; color: white; display: none; font-size: 0.9em; padding: 10px; }
         .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .size-info { font-size: 0.85em; color: #64748b; margin-top: 5px; font-weight: normal; }
     </style>
 </head>
 <body>
@@ -33,7 +34,7 @@
 
     <div class="control-panel">
         <div class="row">
-            <span class="label">Min. Punkt-Abstand [1-2000 Meter]:</span>
+            <span class="label">Min. Punkt-Abstand [m]:</span>
             <input type="range" id="dist-slider" min="1" max="2000" value="10">
             <input type="number" id="dist-input" min="1" max="2000" value="10">
         </div>
@@ -44,14 +45,17 @@
         </div>
         <div class="options">
             <label class="checkbox-label"><input type="checkbox" id="check-time"> Zeitstempel löschen</label>
-            <label class="checkbox-label"><input type="checkbox" id="check-ele"> Höhe komplett löschen (sonst nur auf m runden)</label>
-            <label class="checkbox-label"><input type="checkbox" id="check-garbage" checked> overhead Metadaten löschen</label>
+            <label class="checkbox-label"><input type="checkbox" id="check-ele"> Höhe komplett löschen</label>
+            <label class="checkbox-label"><input type="checkbox" id="check-garbage" checked> Metadaten löschen</label>
             <label class="checkbox-label"><input type="checkbox" id="check-minify" > XML komprimieren</label>
         </div>
     </div>
 
     <button id="optimize-btn" class="btn">Datei jetzt optimieren</button>
+    
     <div id="status-box" class="status-box">Bereit.</div>
+
+    <button id="copy-btn" class="btn">Filename in Zwischenablage kopieren</button>
     <button id="download-btn" class="btn">Optimiertes GPX speichern</button>
 </div>
 
@@ -64,10 +68,13 @@
     const precInput = document.getElementById('prec-input');
     const optimizeBtn = document.getElementById('optimize-btn');
     const downloadBtn = document.getElementById('download-btn');
+    const copyBtn = document.getElementById('copy-btn');
     const statusBox = document.getElementById('status-box');
 
     let rawXmlData = "";
+    let originalSize = 0;
     let lastFileName = "";
+    let finalFileName = "";
     let finalXmlString = "";
 
     distSlider.oninput = () => { distInput.value = distSlider.value; };
@@ -81,94 +88,127 @@
     dropZone.ondragleave = () => dropZone.classList.remove('hover');
     dropZone.ondrop = e => { e.preventDefault(); dropZone.classList.remove('hover'); handleFile(e.dataTransfer.files[0]); };
 
+    function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+        else return (bytes / 1048576).toFixed(1) + " MB";
+    }
+
     function handleFile(file) {
         if (!file) return;
         lastFileName = file.name;
+        originalSize = file.size;
         const reader = new FileReader();
         reader.onload = e => { 
             rawXmlData = e.target.result; 
-            statusBox.innerText = "Geladen: " + file.name;
+            statusBox.innerHTML = `Datei geladen: ${file.name}<br><span class="size-info">Originalgröße: ${formatBytes(originalSize)}</span>`;
             downloadBtn.style.display = "none";
+            copyBtn.style.display = "none";
         };
         reader.readAsText(file);
     }
 
     optimizeBtn.onclick = () => {
         if (!rawXmlData) { statusBox.innerText = "❌ Keine Datei geladen!"; return; }
+        
         const parser = new DOMParser();
         const xml = parser.parseFromString(rawXmlData, "text/xml");
         const minDistanceMeters = parseFloat(distInput.value);
         const precision = parseInt(precInput.value);
         const doRemoveEle = document.getElementById('check-ele').checked;
+        const doRemoveTime = document.getElementById('check-time').checked;
         const doMinify = document.getElementById('check-minify').checked;
 
         let countIn = 0, countOut = 0;
-
         let newGpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Gpx-Optimizer" xmlns="http://www.topografix.com/GPX/1/1">`;
 
-        // Wir iterieren über alle Tracks im Dokument
-        const tracks = xml.getElementsByTagNameNS("*", "trk");
+        // Process Helper for points (handles both trkpt and rtept)
+        const processPoints = (pts, tagName) => {
+            let buffer = "";
+            let lastLat = null, lastLon = null;
+            const ptsArray = Array.from(pts);
+            countIn += ptsArray.length;
 
-        for (let t = 0; t < tracks.length; t++) {
-            const currentTrk = tracks[t];
-            const trkNameNode = currentTrk.querySelector("name");
-            const trkTypeNode = currentTrk.querySelector("type");
-            
-            newGpx += `\n<trk>`;
-            if (trkNameNode) newGpx += `\n  <name>${trkNameNode.textContent}</name>`;
-            if (trkTypeNode) newGpx += `\n  <type>${trkTypeNode.textContent}</type>`;
-
-            // Segmente innerhalb dieses spezifischen Tracks suchen
-            const segments = currentTrk.getElementsByTagNameNS("*", "trkseg");
-
-            for (let i = 0; i < segments.length; i++) {
-                const pts = Array.from(segments[i].getElementsByTagNameNS("*", "trkpt"));
-                countIn += pts.length;
-
-                if (pts.length > 0) {
-                    newGpx += `\n  <trkseg>`;
-                    let lastLat = null, lastLon = null;
-
-                    pts.forEach((p, idx) => {
-                        const lat = parseFloat(p.getAttribute("lat").replace(',', '.'));
-                        const lon = parseFloat(p.getAttribute("lon").replace(',', '.'));
-                        
-                        let keep = false;
-                        if (idx === 0 || idx === pts.length - 1) {
-                            keep = true;
-                        } else {
-                            const dLat = (lat - lastLat) * 111320;
-                            const dLon = (lon - lastLon) * 111320 * Math.cos(lat * Math.PI / 180);
-                            const dist = Math.sqrt(dLat * dLat + dLon * dLon);
-                            if (dist >= minDistanceMeters) keep = true;
-                        }
-
-                        if (keep) {
-                            newGpx += `\n    <trkpt lat="${lat.toFixed(precision)}" lon="${lon.toFixed(precision)}">`;
-                            if (!doRemoveEle) {
-                                const eleNodes = p.getElementsByTagNameNS("*", "ele");
-                                if (eleNodes.length > 0) {
-                                    const eleVal = eleNodes[0].textContent.replace(',', '.');
-                                    newGpx += `<ele>${Math.round(parseFloat(eleVal))}</ele>`;
-                                }
-                            }
-                            newGpx += `</trkpt>`;
-                            lastLat = lat; lastLon = lon;
-                            countOut++;
-                        }
-                    });
-                    newGpx += `\n  </trkseg>`;
+            ptsArray.forEach((p, idx) => {
+                const lat = parseFloat(p.getAttribute("lat").replace(',', '.'));
+                const lon = parseFloat(p.getAttribute("lon").replace(',', '.'));
+                
+                let keep = false;
+                if (idx === 0 || idx === ptsArray.length - 1) {
+                    keep = true;
+                } else {
+                    const dLat = (lat - lastLat) * 111320;
+                    const dLon = (lon - lastLon) * 111320 * Math.cos(lat * Math.PI / 180);
+                    const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+                    if (dist >= minDistanceMeters) keep = true;
                 }
+
+                if (keep) {
+                    buffer += `\n    <${tagName} lat="${lat.toFixed(precision)}" lon="${lon.toFixed(precision)}">`;
+                    if (!doRemoveEle) {
+                        const eleNodes = p.getElementsByTagNameNS("*", "ele");
+                        if (eleNodes.length > 0) buffer += `<ele>${Math.round(parseFloat(eleNodes[0].textContent.replace(',', '.')))}</ele>`;
+                    }
+                    if (!doRemoveTime) {
+                        const timeNodes = p.getElementsByTagNameNS("*", "time");
+                        if (timeNodes.length > 0) buffer += `<time>${timeNodes[0].textContent}</time>`;
+                    }
+                    buffer += `</${tagName}>`;
+                    lastLat = lat; lastLon = lon;
+                    countOut++;
+                }
+            });
+            return buffer;
+        };
+
+        // 1. Tracks
+        const tracks = xml.getElementsByTagNameNS("*", "trk");
+        for (let t = 0; t < tracks.length; t++) {
+            const name = tracks[t].querySelector("name")?.textContent;
+            newGpx += `\n<trk>${name ? `\n  <name>${name}</name>` : ""}`;
+            const segments = tracks[t].getElementsByTagNameNS("*", "trkseg");
+            for (let s = 0; s < segments.length; s++) {
+                newGpx += `\n  <trkseg>${processPoints(segments[s].getElementsByTagNameNS("*", "trkpt"), "trkpt")}\n  </trkseg>`;
             }
             newGpx += `\n</trk>`;
+        }
+
+        // 2. Routes
+        const routes = xml.getElementsByTagNameNS("*", "rte");
+        for (let r = 0; r < routes.length; r++) {
+            const name = routes[r].querySelector("name")?.textContent;
+            newGpx += `\n<rte>${name ? `\n  <name>${name}</name>` : ""}${processPoints(routes[r].getElementsByTagNameNS("*", "rtept"), "rtept")}\n</rte>`;
         }
 
         newGpx += `\n</gpx>`;
         if (doMinify) newGpx = newGpx.replace(/>\s+</g, '><').trim();
 
         finalXmlString = newGpx;
-        statusBox.innerHTML = `✅ Fertig!<br>Tracks: ${tracks.length} | Punkte: ${countIn} → ${countOut}`;
+        const newSize = new Blob([finalXmlString]).size;
+        const reduction = ((1 - newSize / originalSize) * 100).toFixed(1);
+
+        // Filename cleaning logic
+        finalFileName = lastFileName.replace(/^track_20(\d{6})_\d{6}_/i, '$1_');
+
+        statusBox.innerHTML = `✅ Fertig!<br>
+            Punkte: ${countIn} → ${countOut}<br>
+            <span class="size-info">Dateigröße: ${formatBytes(originalSize)} → ${formatBytes(newSize)} (<b>-${reduction}%</b>)</span>`;
+        
         downloadBtn.style.display = "block";
+        copyBtn.style.display = "block";
+        copyBtn.innerText = `Filename kopieren: ${finalFileName}`;
+    };
+
+    copyBtn.onclick = () => {
+        navigator.clipboard.writeText(finalFileName).then(() => {
+            const oldText = copyBtn.innerText;
+            copyBtn.innerText = "✅ Kopiert!";
+            copyBtn.style.background = "#10b981";
+            setTimeout(() => { 
+                copyBtn.innerText = oldText; 
+                copyBtn.style.background = "#64748b";
+            }, 2000);
+        });
     };
 
     downloadBtn.onclick = () => {
@@ -176,7 +216,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = lastFileName;
+        a.download = finalFileName;
         a.click();
         URL.revokeObjectURL(url);
     };
