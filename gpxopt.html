@@ -73,10 +73,9 @@
     let finalXmlString = "";
     let originalSize = 0;
     let directoryHandle = null;
-    let globalStoredFileName = ""; // Sicherheits-Variable
+    let globalStoredFileName = "";
 
     // --- AUTOMATISCHE REPARATUR ---
-    // Stellt sicher, dass der Name niemals verloren geht
     setInterval(() => {
         const stored = sessionStorage.getItem('lastGpxName') || globalStoredFileName;
         if (stored && !copyBtn.innerText.includes(stored)) {
@@ -101,7 +100,15 @@
         const reader = new FileReader();
         reader.onload = (e) => {
             rawXmlData = e.target.result;
-            const newName = file.name.replace(/^track_20(\d{6})_\d{6}_/i, '$1_');
+            
+            // 1. Datum kürzen wie gewohnt
+            let newName = file.name.replace(/^track_20(\d{6})_\d{6}_/i, '$1_');
+            
+            // 2. Umlaute und ß ersetzen (Groß- und Kleinschreibung berücksichtigt)
+            newName = newName
+                .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue')
+                .replace(/Ä/g, 'Ae').replace(/Ö/g, 'Oe').replace(/Ü/g, 'Ue')
+                .replace(/ß/g, 'sz');
             
             // DREIFACHE SICHERUNG
             globalStoredFileName = newName;
@@ -163,6 +170,7 @@
             return res;
         };
 
+        // 1. TRACKS VERARBEITEN
         const tracks = xml.getElementsByTagName("trk");
         for (let t = 0; t < tracks.length; t++) {
             const trkName = tracks[t].getElementsByTagName("name")[0]?.textContent;
@@ -172,6 +180,15 @@
                 newGpx += `\n  <trkseg>${filterPoints(segs[s].getElementsByTagName("trkpt"), "trkpt")}\n  </trkseg>`;
             }
             newGpx += `\n</trk>`;
+        }
+
+        // 2. ROUTEN VERARBEITEN
+        const routes = xml.getElementsByTagName("rte");
+        for (let r = 0; r < routes.length; r++) {
+            const rteName = routes[r].getElementsByTagName("name")[0]?.textContent;
+            newGpx += `\n<rte>${rteName ? `\n  <name>${rteName}</name>` : ""}`;
+            newGpx += filterPoints(routes[r].getElementsByTagName("rtept"), "rtept");
+            newGpx += `\n</rte>`;
         }
 
         newGpx += `\n</gpx>`;
