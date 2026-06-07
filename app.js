@@ -702,7 +702,7 @@ function jumpToMap(indices) {
             // Genau ein Marker gefunden
             const p = uniqueMarkers[0];
             const originalIdx = photoMarkers.indexOf(p);
-            map.flyTo([p.lat, p.lon], 10, { duration: 1.5 });
+            map.flyTo([p.lat, p.lon], 12, { duration: 1.5 });
 
             // Popup nur bei Einzelziel öffnen
             map.once('moveend', () => {
