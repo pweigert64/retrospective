@@ -475,6 +475,23 @@ function refreshAllMarkerPopups() {
     });
 }
 
+/**------------------------------------------------------------
+ * shows the optional .md (markdown) file
+ *-----------------------------------------------------------*/
+function openStory(reportUrl) {
+    // Tell marked to treat single line breaks as real <br> tags
+    marked.setOptions({
+        breaks: true
+    });
+
+    fetch(reportUrl)
+        .then(response => response.text())
+        .then(markdownText => {
+            document.getElementById('report-popup-content').innerHTML = marked.parse(markdownText);
+            document.getElementById('report-popup').classList.remove('hidden');
+        });
+}
+
 //------------------------------------------------------------------
 // Helper to keep code DRY (Don't Repeat Yourself)
 // Copy the HTML building logic from createMarker into this function
@@ -488,45 +505,73 @@ function getPopupHTML(p, idx) {
     // THE STATE CHECK: Is this track currently visible?
     const active = !!loadedTracks[idx]; 
 
-    // ALBUM BUTTON LOGIC
+    // Status helpers
     const hasAlbum = (p.album && p.album.startsWith('http'));
-    // need to override the link representation (blue/underline) with white and no-underline
-    const albumBtnClass = hasAlbum ? 'bg-sky-600 text-white no-underline' :
-                                        'bg-gray-300 cursor-not-allowed';
-    const albumBtnText = hasAlbum ? '<span class="text-[14px] mr-1">📸</span> ALBUM' : 
-                                    '<span class="text-[14px] mr-1">🚫</span> NO ALBUM';
-    const albumBtnLink = hasAlbum ? `href="${p.album}" target="_blank"` : 'onclick="return false;"';
+    const hasReport = (p.report && p.report.trim().length > 0);
 
-    // TRACK BUTTON LOGIC
+    // Dynamischen Pfad für den Bericht via getAssetBase generieren
+    const reportUrl = hasReport ? `${getAssetBase(p.year)}/${p.report.trim()}` : '';
+
+    // --- DYNAMISCHER LINKER BUTTON (ALBUM UND/ODER BERICHT) ---
+    let leftBtnHtml = '';
+
+    if (hasAlbum && hasReport) {
+        // Fall 1: BEIDES DA (Wir splitten den Platz für zwei schmale Buttons im Popup)
+        leftBtnHtml = `
+            <div class="flex-1 flex gap-1">
+                <a href="${p.album}" target="_blank" class="flex-1 bg-sky-600 text-white no-underline text-[14px] font-bold rounded flex items-center justify-center p-1 py-[4px] leading-none" title="Album">📸</a>
+                <button onclick="openStory('${reportUrl}')" class="flex-1 bg-amber-600 text-white text-[14px] font-bold rounded flex items-center justify-center p-1 py-[4px] leading-none" title="Story">📝</button>
+            </div>`;
+    } else if (hasAlbum) {
+        // Fall 2: NUR ALBUM
+        leftBtnHtml = `
+            <a href="${p.album}" target="_blank" class="flex-1 bg-sky-600 text-white no-underline text-[10px] font-bold rounded flex items-center justify-center p-2 py-[4px] leading-none">
+                <span class="text-[14px] mr-1">📸</span> Album
+            </a>`;
+    } else if (hasReport) {
+        // Fall 3: NUR BERICHT
+        leftBtnHtml = `
+            <button onclick="openStory('${reportUrl}')" class="flex-1 bg-amber-600 text-white text-[10px] font-bold rounded flex items-center justify-center p-2 py-[4px] leading-none">
+                <span class="text-[14px] mr-1">📝</span> Story
+            </button>`;
+    } else {
+        // Fall 4: NICHTS DA (Ausgegrauter Platzhalter)
+        leftBtnHtml = `
+            <div class="flex-1 bg-gray-300 text-gray-500 text-[10px] font-bold rounded flex items-center justify-center p-2 py-[4px] leading-none cursor-not-allowed">
+                <span class="text-[12px] mr-1">🚫</span> void
+            </div>`;
+    }
+
+    // TRACK BUTTON LOGIC (Bleibt völlig unverändert)
     const hasTrack = (p.gpx && p.gpx.length > 5);
     let trackBtnClass, trackBtnText;
     
     if (!hasTrack) {
         trackBtnClass = 'bg-gray-300 cursor-not-allowed';
-        trackBtnText = '<span class="text-[14px] mr-1">🚫</span> NO TRACK';
+        trackBtnText = '<span class="text-[14px] mr-1">🚫</span> No Track';
     } else if (active) {
-        trackBtnClass = 'bg-gray-500'; // Gray = "Click to hide"
-        trackBtnText = '<span class="text-[14px] mr-1">❌</span> HIDE';
+        trackBtnClass = 'bg-gray-500'; 
+        trackBtnText = '<span class="text-[14px] mr-1">❌</span> Hide Track';
     } else {
-        trackBtnClass = 'bg-emerald-700'; // Green = "Click to show"
-        trackBtnText = '<span class="text-[14px] mr-1">🗺️</span> TRACK';
+        trackBtnClass = 'bg-emerald-700'; 
+        trackBtnText = '<span class="text-[14px] mr-1">🗺️</span> Track';
     }
 
     const imgHtml = (p.img && p.img.length > 4) 
         ? `<img src="${getAssetBase(p.year)}/${p.img}" class="photo-popup-img" onerror="this.style.display='none'">` 
         : '';
 
+    // DAS RETURN-TEMPLATE
     return `
-        <div class="text-center">
+        <div class="text-center" style="min-width: 180px;">
             ${imgHtml}
             <div class="popup-title" title="${p.title}">${p.title}</div>
             <div style="font-size: 9px; color: #666; margin-bottom: 8px;">
                 <span class="use-noto" style="font-size: 14px;">${displayIcon}</span> ${p.activity || 'unknown'}
             </div>
             <div class="flex flex-row gap-2 justify-center">
-                <a ${albumBtnLink} class="flex-1 p-2 py-[4px] ${albumBtnClass} text-white text-[10px] font-bold rounded flex items-center justify-center leading-none">
-                    ${albumBtnText}
-                </a>
+                ${leftBtnHtml} 
+                
                 <button onclick="${hasTrack ? `loadGpxTrack(${idx})` : ''}" 
                         class="flex-1 p-2 py-[4px] ${trackBtnClass} text-white text-[10px] font-bold rounded flex items-center justify-center leading-none">
                     ${trackBtnText}
@@ -564,9 +609,34 @@ function createPortalCard(p, idx) {
     
     // Status helpers
     const hasAlbum = p.album && p.album.startsWith('http');
+    const hasReport = p.report && p.report.trim().length > 0; 
     const hasLocation = (p.lat && p.lon);
     
     const canShowOnMap = hasLocation || p.isCollectionHeader;
+    
+    // --- DYNAMISCHER INHALTS-BLOCK (ALBUM UND/ODER BERICHT) ---
+    let contentBlockHtml = '';
+    
+    // Dynamischen Pfad für den Bericht via getAssetBase generieren
+    const reportUrl = hasReport ? `${getAssetBase(p.year)}/${p.report.trim()}` : '';
+    
+    if (hasAlbum && hasReport) {
+        // Fall 1: BEIDES existiert (Button wird gesplittet)
+        contentBlockHtml = `
+            <div class="flex-1 flex gap-1">
+                <a href="${p.album}" target="_blank" class="flex-1 py-2 bg-blue-50 text-blue-600 rounded-lg text-[9px] font-bold text-center flex items-center justify-center gap-0.5 no-underline">📸 Album</a>
+                <button onclick="openStory('${reportUrl}')" class="flex-1 py-2 bg-amber-50 text-amber-600 rounded-lg text-[9px] font-bold text-center flex items-center justify-center gap-0.5">📝 Story</button>
+            </div>`;
+    } else if (hasAlbum) {
+        // Fall 2: Nur Album existiert
+        contentBlockHtml = `<a href="${p.album}" target="_blank" class="flex-1 py-2 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold text-center no-underline">📖 Album</a>`;
+    } else if (hasReport) {
+        // Fall 3: Nur Bericht existiert
+        contentBlockHtml = `<button onclick="openStory('${reportUrl}')" class="flex-1 py-2 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-bold text-center">📝 Story</button>`;
+    } else {
+        // Fall 4: Gar nichts existiert
+        contentBlockHtml = `<div class="flex-1 py-2 bg-gray-50 text-gray-400 rounded-lg text-[10px] font-bold text-center">🚫 NO CONTENT</div>`;
+    }
     
     return `
         <div class="portal-card bg-white shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-all border border-gray-100" data-idx="${idx}">
@@ -582,10 +652,7 @@ function createPortalCard(p, idx) {
                 </div>
 
                 <div class="mt-auto flex gap-2">
-                    ${hasAlbum ? 
-                        `<a href="${p.album}" target="_blank" class="flex-1 py-2 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold text-center">📖 ALBUM</a>` : 
-                        `<div class="flex-1 py-2 bg-gray-50 text-gray-400 rounded-lg text-[10px] font-bold text-center">🚫 NO ALBUM</div>`
-                    }
+                    ${contentBlockHtml}
                     
                     <button onclick="${canShowOnMap ? `jumpToMap(${idx})` : ''}" 
                             class="flex-1 py-2 ${canShowOnMap ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400 cursor-not-allowed'} rounded-lg text-[10px] font-bold">
