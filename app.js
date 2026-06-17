@@ -49,6 +49,38 @@ function toggleSidebar() {
 }
 
 /* -------------------------------------------------------------------------
+ * TOGGLE (i)-Button (reading info.md)
+ * -----------------------------------------------------------------------*/
+// Variable, um zu speichern, ob wir die Info schon einmal geladen haben (Performance-Schutz)
+let isInfoLoaded = false;
+
+function toggleInfoModal() {
+    const modal = document.getElementById('info-modal');
+    const isOpening = modal.classList.contains('hidden');
+
+    // Wenn das Modal geöffnet wird UND wir die Info noch nicht geladen haben
+    if (isOpening && !isInfoLoaded) {
+        fetch('info.md')
+            .then(response => {
+                if (!response.ok) throw new Error('info.md konnte nicht geladen werden');
+                return response.text();
+            })
+            .then(markdownText => {
+                // Konvertiert das info.md in HTML und injiziert es
+                document.getElementById('info-modal-content').innerHTML = marked.parse(markdownText);
+                isInfoLoaded = true; // Markieren, dass es geladen ist
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById('info-modal-content').innerHTML = `<p class="text-red-500">Fehler beim Laden der Projekt-Info.</p>`;
+            });
+    }
+
+    // Modal umschalten (anzeigen / verstecken)
+    modal.classList.toggle('hidden');
+}
+
+/* -------------------------------------------------------------------------
  * TOGGLE Searchbar (sliding in from beneath top-nav)
  * -----------------------------------------------------------------------*/
 function toggleTxtSearch() {
