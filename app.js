@@ -2,7 +2,7 @@ const myTitle = document.title;
 document.getElementById('current-year-label').textContent = myTitle;
 
 const COLORS = { 
-    'ski': '#4f46e5', 'hike': '#b54708', 'climb': '#dc2626', 
+    'ski': '#4f46e5', 'hike': '#b54708', 'climb': '#dc2626', 'rope': '#dc2626',
     'bike': '#024302', 'bike+hike': '#f97316', 'trip': '#9333ea', 'unknown': '#6b7280' 
 };
 const ICONS_MAP = { 
@@ -72,7 +72,7 @@ function toggleInfoModal() {
             })
             .catch(err => {
                 console.error(err);
-                document.getElementById('info-modal-content').innerHTML = `<p class="text-red-500">Fehler beim Laden der Projekt-Info.</p>`;
+                document.getElementById('info-modal-content').innerHTML = `<p class="text-red-500">Fehler beim Laden der Site-Info.</p>`;
             });
     }
 
