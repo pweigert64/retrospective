@@ -32,19 +32,31 @@ function getAssetBase(year) {
 }
 
 /* -------------------------------------------------------------------------
- * TOGGLE Sidebar (Hamburger Menu)
+ * TOGGLE Sidebar (Hamburger Menu) 
+ * parameter: 'toggle', 'open', 'close'
  * -----------------------------------------------------------------------*/
-function toggleSidebar() {
+function toggleSidebar(action = 'toggle') {
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebar-overlay');
     
-    sidebar.classList.toggle('open');
-    
-    // Show or hide the dark overlay
-    if (sidebar.classList.contains('open')) {
+    // 1. Soll explizit geöffnet werden?
+    if (action === 'open') {
+        sidebar.classList.add('open');
         overlay.classList.remove('hidden');
-    } else {
+    } 
+    // 2. Soll explizit geschlossen werden?
+    else if (action === 'close') {
+        sidebar.classList.remove('open');
         overlay.classList.add('hidden');
+    } 
+    // 3. Wenn kein Parameter übergeben wurde (action = 'toggle'): Zustand einfach umkehren
+    else {
+        sidebar.classList.toggle('open');
+        if (sidebar.classList.contains('open')) {
+            overlay.classList.remove('hidden');
+        } else {
+            overlay.classList.add('hidden');
+        }
     }
 }
 
@@ -1146,6 +1158,7 @@ function handleDeepLink() {
     if (matches.length === 1) {
         const targetIdx = photoMarkers.indexOf(matches[0]);
         jumpToMap(targetIdx); // Reuse the jumpToMap logic to handle the view switch and focusing
+        toggleSidebar('close'); // ensure sidebar is closed
         return true; // link found
     }
 
@@ -1153,6 +1166,7 @@ function handleDeepLink() {
     if ( matches.length > 1) {
         const targetIndices = matches.map(m => photoMarkers.indexOf(m));
         jumpToMap(targetIndices); // Reuse the jumpToMap logic to handle the view switch and focusing
+        toggleSidebar('close');
         return true; // link found
     }
 
