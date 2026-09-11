@@ -25,3 +25,6 @@ Based in **Linz, Austria**, this project documents extensive exploration of:
 
 ### 🔍 Search Keywords
 Austrian Alps, Hiking GPX Tracks, Mapping, Skitouren, Bike & Rail, Bike & Hike, Linz, Bergsteigen, Klettern, Wandern, Kletterwandern, Totes Gebirge, Gesäuse, Dachstein, Hochkönig, Tennengebirge, Gosaukamm, Tauern.
+
+### Deep Links
+Use `?s=<title>` to open a matching activity. The optional `view` parameter selects the initial view: `view=map` (default) or `view=portal`.

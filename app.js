@@ -13,6 +13,7 @@ let map, overviewLayer, detailLayer, hikingLayer, cyclingLayer;
 let photoMarkers = [], currentMarkers = [], allMarkers = [], loadedTracks = {}; 
 let activeFilters = { ski: true, piste: true, hike: true, climb: true, rope: true, bike: true, 'bike+hike': true, trip: true, unknown: true };
 let activeTxtSearch = '';
+let selectedTourIdx = null;
 let activeYear = 'All', isInitialLoad = true; 
 let MAPTILER_KEY, SHEETS_CSV_URL;
 let typingTimer;               // Timer for real-time debounce (hesitate with immediate search)
@@ -328,21 +329,22 @@ function getCurrentView() {
  * If a card has its top beyond the header (at 60px) it is fully visible.
  * ------------------------------------------------------------------------*/
 function getTopPortalIndex() {
-    // 1. Alle aktuell gerenderten Cards im Portal holen
-    const cards = document.querySelectorAll('.portal-card');
-    const headerHeight = 60; // Dein h-[60px] Header
+    const portal = document.getElementById('portal-view');
+    if (!portal) return null;
 
-    for (let card of cards) {
+    const cards = document.querySelectorAll('.portal-card');
+    const portalRect = portal.getBoundingClientRect();
+    const visibleCards = [...cards].filter(card => {
         const rect = card.getBoundingClientRect();
-        
-        // find first card with top > 0 (most of the 200px are visible)
-        // but maybe we should ensure full visibility ...
-        if (rect.top > headerHeight) {
-            // extract Index!
-            return parseInt(card.dataset.idx);
-        }
-    }
-    return null;
+        return rect.bottom > portalRect.top && rect.top < portalRect.bottom;
+    });
+
+    if (visibleCards.length === 0) return null;
+
+    visibleCards.sort((first, second) =>
+        first.getBoundingClientRect().top - second.getBoundingClientRect().top
+    );
+    return parseInt(visibleCards[0].dataset.idx, 10);
 }
 
 /* -------------------------------------------------------------------------
@@ -356,7 +358,8 @@ function switchView(view, shouldFlyToTopIdx = false) {
     console.log(`Switching to ${view} view. shouldFlyToTopIdx: ${shouldFlyToTopIdx}`);  
     let topIdx = null;
     if (isMap && shouldFlyToTopIdx) {
-        topIdx = getTopPortalIndex(); 
+        topIdx = selectedTourIdx ?? getTopPortalIndex();
+        if (selectedTourIdx === null) selectedTourIdx = topIdx;
     }
     
     // We toggle the display of the two main containers
@@ -395,6 +398,21 @@ function switchView(view, shouldFlyToTopIdx = false) {
         }, 300); // Give CSS time to render the div
     } else {
         renderPortal();
+        if (selectedTourIdx !== null) {
+            restorePortalCard(selectedTourIdx);
+        }
+    }
+}
+
+function restorePortalCard(idx, attempt = 0) {
+    const card = document.querySelector(`.portal-card[data-idx="${idx}"]`);
+    if (card) {
+        card.scrollIntoView({ block: 'start' });
+        return;
+    }
+
+    if (attempt < 20) {
+        requestAnimationFrame(() => restorePortalCard(idx, attempt + 1));
     }
 }
 
@@ -424,6 +442,14 @@ function handleTxtSearch(val, isForced = false) {
  */
 function executeSearch(val, shouldBlur) {
     activeTxtSearch = val;
+    const urlParams = new URLSearchParams(window.location.search);
+    const deepLinkQuery = urlParams.get('s')?.trim().toLowerCase();
+    if (deepLinkQuery && val.trim().toLowerCase() !== deepLinkQuery) {
+        urlParams.delete('s');
+        urlParams.delete('view');
+        const newUrl = `${window.location.pathname}${urlParams.toString() ? `?${urlParams}` : ''}${window.location.hash}`;
+        window.history.replaceState({}, '', newUrl);
+    }
         
     // Use the logic that matches your switchView method
     const isMapActive = document.getElementById('map-view').style.display === 'block';
@@ -752,6 +778,15 @@ function jumpToMap(indices) {
     const idxList = Array.isArray(indices) ? indices : [indices];
     if (idxList.length === 0) return;
 
+    selectedTourIdx = idxList[0];
+
+    // Close the previous tour popup before filters or marker rendering preserve it.
+    if (map) {
+        map.eachLayer(layer => {
+            if (layer instanceof L.Marker) layer.closePopup();
+        });
+    }
+
     // 1. YEAR-SYNC (behalten wir bei)
     const years = [...new Set(idxList.map(i => photoMarkers[i]?.year?.toString()).filter(Boolean))];
     if (years.length > 0) {
@@ -764,6 +799,7 @@ function jumpToMap(indices) {
     setTimeout(() => {
         let finalMarkersToShow = [];
         let processedAlbums = new Set();
+        let trackIndices = [];
 
         // 2. ITERATION ÜBER ALLE ÜBERGEBENEN INDIZES
         idxList.forEach(i => {
@@ -785,6 +821,7 @@ function jumpToMap(indices) {
                         
                         // GPX-Track laden (falls vorhanden)
                         const sIdx = photoMarkers.indexOf(s);
+                        if (s.gpx && s.gpx.length > 5) trackIndices.push(sIdx);
                         if (s.gpx && s.gpx.length > 5 && !loadedTracks[sIdx]) {
                             loadGpxTrack(sIdx, false);
                         }
@@ -794,30 +831,46 @@ function jumpToMap(indices) {
             // ODER: Ist es ein normaler Marker mit Koordinaten?
             else if (p.lat && p.lon) {
                 finalMarkersToShow.push(p);
+                if (p.gpx && p.gpx.length > 5) trackIndices.push(i);
                 if (p.gpx && p.gpx.length > 5 && !loadedTracks[i]) {
                     loadGpxTrack(i, false);
                 }
             }
         });
 
-        // 3. DARSTELLUNG
+        // 3. DARSTELLUNG: include loaded GPX bounds before fitting the map
         if (finalMarkersToShow.length === 0) return;
 
         // Eindeutige Marker sicherstellen (falls ein Marker über Index UND Album kam)
         const uniqueMarkers = [...new Set(finalMarkersToShow)];
+        const fitSelection = (attempt = 0) => {
+            const tracksStillLoading = trackIndices.some(idx => !loadedTracks[idx]);
+            if (tracksStillLoading && attempt < 50) {
+                setTimeout(() => fitSelection(attempt + 1), 100);
+                return;
+            }
 
-        if (uniqueMarkers.length > 1) {
-            const bounds = L.latLngBounds(uniqueMarkers.map(m => [m.lat, m.lon]));
-            map.flyToBounds(bounds, { padding: [80, 80], duration: 1.5 });
-        } else {
-            // Genau ein Marker gefunden
+            const bounds = L.latLngBounds();
+            uniqueMarkers.forEach(marker => bounds.extend([marker.lat, marker.lon]));
+            trackIndices.forEach(idx => {
+                const trackBounds = loadedTracks[idx]?.group?.getBounds();
+                if (trackBounds?.isValid()) bounds.extend(trackBounds);
+            });
+
+            if (!bounds.isValid()) return;
+
+            if (uniqueMarkers.length > 1 || trackIndices.length > 0) {
+                map.flyToBounds(bounds, { padding: [80, 80], duration: 1.5 });
+                return;
+            }
+
             const p = uniqueMarkers[0];
             const originalIdx = photoMarkers.indexOf(p);
             map.flyTo([p.lat, p.lon], 12, { duration: 1.5 });
 
             // Popup nur bei Einzelziel öffnen
             map.once('moveend', () => {
-                let attempts = 0;
+                let popupAttempts = 0;
                 const tryOpen = () => {
                     let found = false;
                     map.eachLayer(layer => {
@@ -826,14 +879,16 @@ function jumpToMap(indices) {
                             found = true;
                         }
                     });
-                    if (!found && attempts < 10) {
-                        attempts++;
+                    if (!found && popupAttempts < 10) {
+                        popupAttempts++;
                         setTimeout(tryOpen, 100);
                     }
                 };
                 tryOpen();
             });
-        }
+        };
+
+        fitSelection();
     }, 400);
 }
 
@@ -1118,6 +1173,8 @@ function createMarker(p, idx) {
         icon: icon, 
         zIndexOffset: 1000,
         activityData: p // anchor for refresh
+    }).on('click', () => {
+        selectedTourIdx = idx;
     })
     .bindPopup(getPopupHTML(p, idx), {
         minWidth: 200,
@@ -1139,13 +1196,15 @@ function createMarker(p, idx) {
 }
 
 /* -------------------------------------------------------------------------
-    * HANDLE DEEP LINK extracts and applies the logic of parameterized search
-    * Handles links like: ?album:Abc123&activity:ski
-    --------------------------------------------------------------------------*/
+ * HANDLE DEEP LINK extracts and applies the logic of parameterized search
+ * Handles links like: ?s=<search pattern>&view=map|portal
+ --------------------------------------------------------------------------*/
 // Am Ende deiner Initialisierung in app.js
 function handleDeepLink() {
     const urlParams = new URLSearchParams(window.location.search);
-    const query = urlParams.get('s')?.toLowerCase();
+    const query = urlParams.get('s')?.trim().toLowerCase();
+    const requestedView = urlParams.get('view');
+    const deepLinkView = requestedView === 'portal' ? 'portal' : 'map';
     console.log("handleDeepLink::urlParams.get():", query);
     if (!query) return false; // no deepLink-query
 
@@ -1156,21 +1215,59 @@ function handleDeepLink() {
     });
 
     if (matches.length === 1) {
+        activeTxtSearch = query;
+        showDeepLinkSearch(query);
         const targetIdx = photoMarkers.indexOf(matches[0]);
-        jumpToMap(targetIdx); // Reuse the jumpToMap logic to handle the view switch and focusing
+        showDeepLinkMatch(targetIdx, deepLinkView);
         toggleSidebar('close'); // ensure sidebar is closed
         return true; // link found
     }
 
     console.log("handleDeepLink::matches.length:", matches.length);
     if ( matches.length > 1) {
+        activeTxtSearch = query;
+        showDeepLinkSearch(query);
         const targetIndices = matches.map(m => photoMarkers.indexOf(m));
-        jumpToMap(targetIndices); // Reuse the jumpToMap logic to handle the view switch and focusing
+        showDeepLinkMatch(targetIndices, deepLinkView);
         toggleSidebar('close');
         return true; // link found
     }
 
     return false; // no match for link
+}
+
+/* -------------------------------------------------------------------------
+ * Paste the content of s=<search pattern> of a deepLink into the 
+ * search box and make it visible.
+ * -----------------------------------------------------------------------*/
+function showDeepLinkSearch(query) {
+    const toolbar = document.getElementById('txtSearchToolbar');
+    const searchInput = document.getElementById('txtSearchInput');
+    toolbar?.classList.remove('hidden');
+    if (searchInput) searchInput.value = query;
+}
+
+/* -------------------------------------------------------------------------
+ * Show the matched results in the appropriate view (portal|map)
+ * -----------------------------------------------------------------------*/
+function showDeepLinkMatch(indices, view) {
+    if (view === 'map') {
+        jumpToMap(indices);
+        return;
+    }
+
+    const idxList = Array.isArray(indices) ? indices : [indices];
+    const years = [...new Set(idxList.map(i => photoMarkers[i]?.year?.toString()).filter(Boolean))];
+    if (years.length === 1 && activeYear !== years[0]) {
+        window.updateActiveYear(years[0]);
+    } else {
+        switchView('portal');
+    }
+
+    setTimeout(() => {
+        const firstCard = document.querySelector(`.portal-card[data-idx="${idxList[0]}"]`);
+        firstCard?.scrollIntoView({ block: 'start' });
+    }, 0);
 }
 
 /* -------------------------------------------------------------------------
