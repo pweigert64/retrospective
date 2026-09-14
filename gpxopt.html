@@ -20,7 +20,9 @@
         #copy-btn { background: #64748b; color: white; }
         #download-btn { background: #10b981; color: white; }
         #save-as-btn { background: #8b5cf6; color: white; }
-        #quick-save-btn { background: #f59e0b; color: white; display: none; }
+        #quick-save-btn { background: #f59e0b; color: white; }
+        .save-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+        @media (max-width: 600px) { .save-buttons { grid-template-columns: 1fr; } }
         .size-info { font-size: 0.85em; color: #64748b; font-weight: normal; margin-top: 4px; }
     </style>
 </head>
@@ -54,11 +56,11 @@
 
     <div class="action-area" style="margin-top: 20px; border-top: 2px solid #e2e8f0; padding-top: 20px;">
         <button id="copy-btn" class="btn">Filename kopieren (Warte auf Datei...)</button>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="save-buttons">
             <button id="download-btn" class="btn">Download</button>
             <button id="save-as-btn" class="btn">Ziel wählen</button>
+            <button id="quick-save-btn" class="btn">Speichern in: <span id="dir-name">Jahr wählen</span></button>
         </div>
-        <button id="quick-save-btn" class="btn">Speichern in: <span id="dir-name">...</span></button>
     </div>
 </div>
 
@@ -74,6 +76,18 @@
     let originalSize = 0;
     let directoryHandle = null;
     let globalStoredFileName = "";
+    let targetYear = "";
+
+    function getTargetYear(fileName) {
+        const match = fileName.match(/^track_(\d{4})\d{4}_/i);
+        return match ? match[1] : "";
+    }
+
+    function updateSaveTarget() {
+        document.getElementById('dir-name').innerText = directoryHandle
+            ? directoryHandle.name
+            : (targetYear || "Jahr wählen");
+    }
 
     // --- AUTOMATISCHE REPARATUR ---
     setInterval(() => {
@@ -100,6 +114,7 @@
         const reader = new FileReader();
         reader.onload = (e) => {
             rawXmlData = e.target.result;
+            targetYear = getTargetYear(file.name);
             
             // 1. Datum kürzen wie gewohnt
             let newName = file.name.replace(/^track_20(\d{6})_\d{6}_/i, '$1_');
@@ -114,6 +129,7 @@
             globalStoredFileName = newName;
             sessionStorage.setItem('lastGpxName', newName);
             copyBtn.innerText = "Filename kopieren: " + newName;
+            updateSaveTarget();
             
             statusBox.innerHTML = `Geladen: ${file.name} <br> <span class="size-info">Größe: ${(originalSize/1024).toFixed(1)} KB</span>`;
         };
@@ -227,12 +243,19 @@
         try {
             directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
             await performSave();
-            quickSaveBtn.style.display = "block";
-            document.getElementById('dir-name').innerText = directoryHandle.name;
+            updateSaveTarget();
         } catch (e) {}
     };
 
-    quickSaveBtn.onclick = async () => { if(directoryHandle) await performSave(); };
+    quickSaveBtn.onclick = async () => {
+        try {
+            if (!directoryHandle) {
+                directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            }
+            await performSave();
+            updateSaveTarget();
+        } catch (e) {}
+    };
 
     async function performSave() {
         const name = sessionStorage.getItem('lastGpxName') || globalStoredFileName;
