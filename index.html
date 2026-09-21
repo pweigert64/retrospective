@@ -85,13 +85,18 @@
 						<!-- Optional: Magnifying glass icon for better UX -->
 						<span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
 					</div>
-					
 					<button onclick="handleTxtSearch(document.getElementById('txtSearchInput').value, true)" 
 							class="bg-slate-800 text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-700 active:scale-95 transition-all shrink-0">
 						GO
 					</button>
 				</div>
-				<span class="text-[10px] text-slate-400 italic px-1">Achtung: Jahrfilter ist immer aktiv!</span>
+				<div class="flex items-center gap-3 px-1">
+					<label class="flex items-center gap-1.5 text-[10px] text-slate-500" title="Reguläre Ausdrücke verwenden">
+						<input type="checkbox" id="regexSearchToggle" onchange="handleTxtSearch(document.getElementById('txtSearchInput').value, true)">
+						<span>Regex</span>
+					</label>
+					<span class="text-[10px] text-slate-400 italic">Achtung: Jahrfilter ist immer aktiv!</span>
+				</div>
 			</div>
 		</div>
 

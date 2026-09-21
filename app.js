@@ -13,6 +13,7 @@ let map, overviewLayer, detailLayer, hikingLayer, cyclingLayer;
 let photoMarkers = [], currentMarkers = [], allMarkers = [], loadedTracks = {}; 
 let activeFilters = { ski: true, piste: true, hike: true, climb: true, rope: true, bike: true, 'bike+hike': true, trip: true, unknown: true };
 let activeTxtSearch = '';
+let activeSearchMode = 'literal';
 let selectedTourIdx = null;
 let activeYear = 'All', isInitialLoad = true; 
 let MAPTILER_KEY, SHEETS_CSV_URL;
@@ -196,7 +197,7 @@ async function fetchSheetData() {
         
         if (isInitialLoad) {
             const urlParams = new URLSearchParams(window.location.search);
-            const hasDeepLink = urlParams.has('s') || urlParams.has('title'); // Prüft beide Varianten
+            const hasDeepLink = urlParams.has('s') || urlParams.has('re') || urlParams.has('title'); // Prüft beide Varianten
 
             if (hasDeepLink) {
                 // Wenn wir einen Deep-Link haben, zeigen wir ALLES an, 
@@ -442,10 +443,13 @@ function handleTxtSearch(val, isForced = false) {
  */
 function executeSearch(val, shouldBlur) {
     activeTxtSearch = val;
+    activeSearchMode = document.getElementById('regexSearchToggle')?.checked ? 'regex' : 'literal';
     const urlParams = new URLSearchParams(window.location.search);
-    const deepLinkQuery = urlParams.get('s')?.trim().toLowerCase();
-    if (deepLinkQuery && val.trim().toLowerCase() !== deepLinkQuery) {
+    const deepLinkKey = urlParams.has('re') ? 're' : 's';
+    const deepLinkQuery = urlParams.get(deepLinkKey);
+    if (deepLinkQuery !== null && (val !== deepLinkQuery || activeSearchMode !== (deepLinkKey === 're' ? 'regex' : 'literal'))) {
         urlParams.delete('s');
+        urlParams.delete('re');
         urlParams.delete('view');
         const newUrl = `${window.location.pathname}${urlParams.toString() ? `?${urlParams}` : ''}${window.location.hash}`;
         window.history.replaceState({}, '', newUrl);
@@ -473,16 +477,19 @@ function executeSearch(val, shouldBlur) {
  */
 function matchesTxtSearch(p, searchStr) {
     if (!searchStr || searchStr.trim() === "") return true;
-    
-    const s = searchStr.toLowerCase();
-    // Fields to search: Title, Tags, and Description (if exists)
-    const title = (p.title || "").toLowerCase();
-    const tags = (p.tags || "").toLowerCase();
-    const desc = (p.description || "").toLowerCase();
-    
-    // Simple logic: returns true if any field contains the search string
-    // You can later expand this to handle multiple words/terms
-    return title.includes(s) || tags.includes(s) || desc.includes(s);
+
+    const fields = [p.title, p.tags, p.description].map(value => value || "");
+    if (activeSearchMode === 'regex') {
+        try {
+            const regex = new RegExp(searchStr, 'i');
+            return fields.some(value => regex.test(value));
+        } catch {
+            return false;
+        }
+    }
+
+    const searchText = searchStr.toLowerCase();
+    return fields.some(value => value.toLowerCase().includes(searchText));
 }
 
 /**--------------------------------------------------------------
@@ -1197,22 +1204,27 @@ function createMarker(p, idx) {
 
 /* -------------------------------------------------------------------------
  * HANDLE DEEP LINK extracts and applies the logic of parameterized search
- * Handles links like: ?s=<search pattern>&view=map|portal
+ * Handles links like: ?s=<literal>&view=map|portal or ?re=<regex>&view=map|portal
  --------------------------------------------------------------------------*/
 // Am Ende deiner Initialisierung in app.js
 function handleDeepLink() {
     const urlParams = new URLSearchParams(window.location.search);
-    const query = urlParams.get('s')?.trim().toLowerCase();
+    const regexQuery = urlParams.get('re');
+    const literalQuery = urlParams.get('s');
+    const query = regexQuery ?? literalQuery;
     const requestedView = urlParams.get('view');
     const deepLinkView = requestedView === 'portal' ? 'portal' : 'map';
     console.log("handleDeepLink::urlParams.get():", query);
     if (!query) return false; // no deepLink-query
 
+    activeSearchMode = regexQuery !== null ? 'regex' : 'literal';
+    const searchInput = document.getElementById('txtSearchInput');
+    const regexToggle = document.getElementById('regexSearchToggle');
+    if (searchInput) searchInput.value = query;
+    if (regexToggle) regexToggle.checked = activeSearchMode === 'regex';
+
     // Search (Modular Filter)
-    const matches = photoMarkers.filter(p => {
-        const titleMatch = p.title?.toLowerCase().includes(query);
-        return titleMatch;
-    });
+    const matches = photoMarkers.filter(p => matchesTxtSearch(p, query));
 
     if (matches.length === 1) {
         activeTxtSearch = query;
