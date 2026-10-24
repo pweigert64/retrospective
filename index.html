@@ -110,9 +110,16 @@
 			</section>
 
 			<section id="peaks-view">
-				<div class="flex items-center justify-between gap-3 mb-4 max-w-[2400px] mx-auto">
+				<div class="peaks-toolbar">
+				<div class="flex flex-wrap items-center justify-between gap-3 mb-2 max-w-[2400px] mx-auto">
 					<div class="flex items-baseline gap-3"><h2 class="font-bold text-lg">Gipfel</h2><span id="peaks-count" class="text-xs text-slate-500"></span></div>
-					<div class="ml-auto flex items-center gap-2">
+					<div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+						<div class="flex items-center gap-1 border border-slate-300 bg-white rounded px-2 py-1">
+							<input id="peak-find-input" type="search" class="w-32 sm:w-44 text-sm outline-none" placeholder="Gipfel suchen…" oninput="searchPeaks(this.value)" onkeydown="handlePeakFindKey(event)" aria-label="In Gipfeln suchen">
+							<span id="peak-find-count" class="min-w-12 text-center text-xs text-slate-500">0/0</span>
+							<button type="button" class="w-8 h-8 hover:bg-slate-100 rounded" onclick="navigatePeakFind(-1)" title="Vorheriger Treffer" aria-label="Vorheriger Treffer">↑</button>
+							<button type="button" class="w-8 h-8 hover:bg-slate-100 rounded" onclick="navigatePeakFind(1)" title="Nächster Treffer" aria-label="Nächster Treffer">↓</button>
+						</div>
 						<label for="peak-sort" class="text-sm text-slate-600">Sort</label>
 						<select id="peak-sort" class="border border-slate-300 rounded px-2 py-1" onchange="renderPeaksGrid()">
 							<option value="name">Gipfel</option>
@@ -122,6 +129,7 @@
 						</select>
 						<button id="peak-sort-direction" type="button" data-direction="desc" class="border border-slate-300 bg-white rounded px-2 py-1 text-sm" onclick="togglePeakSortDirection()" title="Toggle sort direction">Z→A</button>
 					</div>
+				</div>
 				</div>
 				<div id="peaks-grid" class="w-full max-w-[2400px] mx-auto"></div>
 			</section>

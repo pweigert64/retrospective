@@ -12,6 +12,7 @@ const ICONS_MAP = {
 let map, overviewLayer, detailLayer, hikingLayer, cyclingLayer;
 let photoMarkers = [], currentMarkers = [], allMarkers = [], loadedTracks = {};
 let peakRecords = [], peakMarkers = [], peaksLoaded = false, peakLoadFailed = false, peakLoadPromise = null, showPeaksOnMap = false, filterPeaksByFilters = false;
+let peakFindMatches = [], peakFindPosition = -1;
 let activeFilters = { ski: true, piste: true, hike: true, climb: true, rope: true, bike: true, 'bike+hike': true, trip: true, unknown: true };
 let activeTxtSearch = '';
 let activeSearchMode = 'literal';
@@ -469,8 +470,8 @@ function peakField(record, ...names) {
     return '';
 }
 
-async function loadPeakData() {
-    if (peaksLoaded) return peakRecords;
+async function loadPeakData(forceRefresh = false) {
+    if (peaksLoaded && !forceRefresh) return peakRecords;
     if (peakLoadPromise) return peakLoadPromise;
     peakLoadPromise = (async () => {
         try {
@@ -486,7 +487,7 @@ async function loadPeakData() {
             const rows = parseCsv(csvText);
             if (!rows.length) throw new Error('Peaks CSV is empty or has no header row');
             const headers = (rows.shift() || []).map(header => header.trim().toLowerCase().replace(/[\s-]+/g, '_'));
-            peakRecords = rows.map((cells, rowIndex) => {
+            const refreshedPeakRecords = rows.map((cells, rowIndex) => {
                 const record = {};
                 headers.forEach((header, index) => record[header] = (cells[index] || '').trim());
                 record.sheet_row = rowIndex + 2;
@@ -505,12 +506,18 @@ async function loadPeakData() {
                 record.remark = peakField(record, 'remark', 'remarks', 'comment', 'notes', 'bemerkung');
                 return record;
             });
-            if (!peakRecords.length) throw new Error('Peaks CSV has no rows with a recognized name column');
+            if (!refreshedPeakRecords.length) throw new Error('Peaks CSV has no rows with a recognized name column');
+            const isFirstPeakLoad = !peaksLoaded;
+            peakMarkers.forEach(marker => {
+                if (map && map.hasLayer(marker)) map.removeLayer(marker);
+            });
+            peakRecords = refreshedPeakRecords;
+            peakMarkers = [];
             peaksLoaded = true;
             peakLoadFailed = false;
-            showPeaksOnMap = true;
+            if (isFirstPeakLoad) showPeaksOnMap = true;
             const peaksMapToggle = document.getElementById('show-peaks-map');
-            if (peaksMapToggle) peaksMapToggle.checked = true;
+            if (peaksMapToggle) peaksMapToggle.checked = showPeaksOnMap;
             populateYearSidebar();
             renderPeaksGrid();
             renderPeakMarkers();
@@ -519,7 +526,7 @@ async function loadPeakData() {
             console.error('Peaks load failed:', error);
             peakLoadFailed = true;
             renderPeaksGrid();
-            return [];
+            return forceRefresh ? null : [];
         } finally {
             peakLoadPromise = null;
         }
@@ -530,6 +537,15 @@ async function loadPeakData() {
 function getPeakYear(record) {
     const match = String(record.first_visit || '').match(/\d{4}/);
     return match ? match[0] : '';
+}
+
+function isValidPeakCoordinate(value, minimum, maximum) {
+    return Number.isFinite(value) && value >= minimum && value <= maximum;
+}
+
+function hasValidPeakCoordinates(peak) {
+    return isValidPeakCoordinate(peak.lat, -90, 90)
+        && isValidPeakCoordinate(peak.lon, -180, 180);
 }
 
 function parsePeakDate(value) {
@@ -570,6 +586,78 @@ function getFilteredPeaks() {
     });
 }
 
+function getPeakFindText(peak) {
+    return [peak.name, peak.m, peak.elevation, peak.massif, peak.first_visit, peak.additional_visit,
+        peak.hint, peak.latRaw, peak.lonRaw, hasValidPeakCoordinates(peak) ? '' : 'ungültig koordinaten fehler invalid']
+        .filter(Boolean).join(' ').toLocaleLowerCase();
+}
+
+function updatePeakFindMatches(moveToFirst = false) {
+    const query = document.getElementById('peak-find-input')?.value.trim().toLocaleLowerCase() || '';
+    const visiblePeaks = getFilteredPeaks();
+    peakFindMatches = query ? visiblePeaks
+        .filter(peak => getPeakFindText(peak).includes(query))
+        .map(peak => peakRecords.indexOf(peak)) : [];
+    if (peakFindMatches.length === 0) peakFindPosition = -1;
+    else if (moveToFirst || peakFindPosition < 0 || peakFindPosition >= peakFindMatches.length) peakFindPosition = 0;
+    updatePeakFindDisplay(moveToFirst);
+}
+
+function updatePeakFindDisplay(scrollToCurrent = false) {
+    const count = document.getElementById('peak-find-count');
+    const currentPeakIndex = peakFindMatches[peakFindPosition];
+    if (count) count.textContent = peakFindMatches.length
+        ? `${peakFindPosition + 1}/${peakFindMatches.length}`
+        : '0/0';
+    document.querySelectorAll('#peaks-grid tr[data-peak-index]').forEach(row => {
+        const rowIndex = Number(row.dataset.peakIndex);
+        row.classList.toggle('peak-find-match', peakFindMatches.includes(rowIndex));
+        row.classList.toggle('peak-find-current', rowIndex === currentPeakIndex);
+    });
+    if (scrollToCurrent && currentPeakIndex !== undefined) {
+        const row = document.querySelector(`#peaks-grid tr[data-peak-index="${currentPeakIndex}"]`);
+        const view = document.getElementById('peaks-view');
+        const toolbar = document.querySelector('.peaks-toolbar');
+        if (row && view && toolbar) {
+            const rowRect = row.getBoundingClientRect();
+            const viewRect = view.getBoundingClientRect();
+            const toolbarRect = toolbar.getBoundingClientRect();
+            const visibleTop = Math.max(viewRect.top, toolbarRect.bottom) + 8;
+            const visibleBottom = viewRect.bottom - 8;
+            if (rowRect.top < visibleTop || rowRect.bottom > visibleBottom) {
+                view.scrollBy({ top: rowRect.top - visibleTop, behavior: 'smooth' });
+            }
+        }
+    }
+}
+
+window.searchPeaks = function() {
+    peakFindPosition = 0;
+    updatePeakFindMatches(true);
+};
+
+window.navigatePeakFind = function(direction) {
+    if (peakFindMatches.length === 0) return;
+    peakFindPosition = (peakFindPosition + direction + peakFindMatches.length) % peakFindMatches.length;
+    updatePeakFindDisplay(true);
+};
+
+window.handlePeakFindKey = function(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        navigatePeakFind(event.shiftKey ? -1 : 1);
+    }
+};
+
+document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && getCurrentView() === 'peaks') {
+        event.preventDefault();
+        const input = document.getElementById('peak-find-input');
+        input?.focus();
+        input?.select();
+    }
+});
+
 function renderPeaksGrid() {
     const container = document.getElementById('peaks-grid');
     if (!container) return;
@@ -597,7 +685,8 @@ function renderPeaksGrid() {
         return descending ? -comparison : comparison;
     });
     const count = document.getElementById('peaks-count');
-    if (count) count.textContent = `${records.length} shown / ${peakRecords.length} loaded`;
+    const invalidCoordinateCount = peakRecords.filter(peak => !hasValidPeakCoordinates(peak)).length;
+    if (count) count.textContent = `${records.length} shown / ${peakRecords.length} loaded${invalidCoordinateCount ? ` · ${invalidCoordinateCount} Koordinatenfehler` : ''}`;
     container.innerHTML = `
         <div class="overflow-x-auto bg-white border border-slate-200">
             <table class="peaks-table">
@@ -605,20 +694,21 @@ function renderPeaksGrid() {
                     <th class="peak-row-number">Row</th><th>Gipfel</th><th class="peak-elevation">m</th><th>Gebirge</th><th>Datum1</th><th>Hinweis</th><th>Lat</th><th>Lon</th>
                 </tr></thead>
                 <tbody>${records.map((peak, index) => `
-                    <tr>
+                        <tr data-peak-index="${peakRecords.indexOf(peak)}" class="${hasValidPeakCoordinates(peak) ? '' : 'peak-invalid-coordinates'}">
                         <td class="peak-row-number">${index + 1}</td>
                         <td>${peak.name ? `<button class="peak-name-button" onclick="focusPeak(${peakRecords.indexOf(peak)})">${escapeHtml(peak.name)}</button>` : '<span class="text-red-600">(blank)</span>'}</td>
                         <td class="peak-elevation">${escapeHtml(peak.m || peak.elevation || '')}</td>
                         <td>${escapeHtml(peak.massif)}</td>
                         <td class="peak-date">${escapeHtml(formatPeakDate(peak.first_visit))}</td>
                         <td>${escapeHtml(peak.hint)}</td>
-                        <td>${escapeHtml(peak.latRaw || '')}</td>
-                        <td>${escapeHtml(peak.lonRaw || '')}</td>
+                        <td class="${isValidPeakCoordinate(peak.lat, -90, 90) ? '' : 'peak-invalid-coordinate'}" title="${isValidPeakCoordinate(peak.lat, -90, 90) ? '' : 'Breitengrad muss zwischen -90 und 90 liegen'}">${escapeHtml(peak.latRaw)}${isValidPeakCoordinate(peak.lat, -90, 90) ? '' : ' ⚠'}</td>
+                        <td class="${isValidPeakCoordinate(peak.lon, -180, 180) ? '' : 'peak-invalid-coordinate'}" title="${isValidPeakCoordinate(peak.lon, -180, 180) ? '' : 'Längengrad muss zwischen -180 und 180 liegen'}">${escapeHtml(peak.lonRaw)}${isValidPeakCoordinate(peak.lon, -180, 180) ? '' : ' ⚠'}</td>
                     </tr>
                 `).join('')}</tbody>
             </table>
             ${records.length ? '' : '<p class="p-4 text-slate-500">No peaks match the current filters.</p>'}
         </div>`;
+    updatePeakFindMatches();
 }
 
 window.togglePeakMap = async function(enabled) {
@@ -636,7 +726,7 @@ window.togglePeakFilters = function(enabled) {
 window.focusPeak = async function(index) {
     await loadPeakData();
     const peak = peakRecords[index];
-    if (!peak || !Number.isFinite(peak.lat) || !Number.isFinite(peak.lon)) return;
+    if (!peak || !hasValidPeakCoordinates(peak)) return;
     const year = getPeakYear(peak);
     if (filterPeaksByFilters && year && activeYear !== 'All' && activeYear !== year) window.updateActiveYear(year);
     showPeaksOnMap = true;
@@ -1158,7 +1248,7 @@ function jumpToMap(indices) {
 /* -------------------------------------------------------------------------
     * RELOAD DATA: Triggered by the button
     * ------------------------------------------------------------------------*/
-window.reloadData = function() {
+window.reloadData = async function() {
     // 1. Get the status label from the bottom of your panel
     const status = document.getElementById('reload-status');
     if (status) {
@@ -1178,23 +1268,20 @@ window.reloadData = function() {
     photoMarkers = []; 
 
     // 3. Trigger the fetch and handle the result
-    fetchSheetData().then((success) => {
-        if (status) {
-            if (success) {
-                status.innerText = "DONE!";
-                status.style.color = "#10b981"; // Green
-            } else {
-                status.innerText = "ERROR";
-                status.style.color = "#ef4444"; // Red
-            }
-            
-            // Reset to idle after 3 seconds
-            setTimeout(() => { 
-                status.innerText = "IDLE"; 
-                status.style.color = ""; 
-            }, 3000);
-        }
-    });
+    const refreshLoadedPeaks = peaksLoaded;
+    const [toursSuccess, peakResult] = await Promise.all([
+        fetchSheetData(),
+        refreshLoadedPeaks ? loadPeakData(true) : Promise.resolve(true)
+    ]);
+    if (status) {
+        const success = toursSuccess && peakResult !== null;
+        status.innerText = success ? "DONE!" : "ERROR";
+        status.style.color = success ? "#10b981" : "#ef4444";
+        setTimeout(() => {
+            status.innerText = "IDLE";
+            status.style.color = "";
+        }, 3000);
+    }
 };
 
 /* -------------------------------------------------------------------------
@@ -1718,7 +1805,7 @@ function renderPeakMarkers() {
             (activeYear === 'All' || year === activeYear)
             && matchesTxtSearch({ title: peak?.name, tags: peak?.massif, description: [peak?.first_visit, peak?.additional_visit, peak?.hint, peak?.remark].filter(Boolean).join(' ') }, activeTxtSearch)
         );
-        const shouldShow = showPeaksOnMap && peak && Number.isFinite(peak.lat) && Number.isFinite(peak.lon)
+        const shouldShow = showPeaksOnMap && peak && hasValidPeakCoordinates(peak)
             && peakFiltersMatch;
         if (!shouldShow) {
             if (marker && map.hasLayer(marker)) map.removeLayer(marker);

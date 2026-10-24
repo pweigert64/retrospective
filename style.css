@@ -135,11 +135,24 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     height: 0;
     min-height: 100%;
 }
+.peaks-toolbar {
+    position: sticky;
+    top: -20px;
+    z-index: 5;
+    margin: -20px -20px 12px;
+    padding: 12px 20px 8px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e2e8f0;
+}
 .peaks-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
 .peaks-table th, .peaks-table td { padding: 7px 9px; border: 1px solid #d1d5db; vertical-align: top; }
 .peaks-table th { position: sticky; top: 0; z-index: 1; background: #f1f5f9; font-weight: 700; white-space: nowrap; }
 .peaks-table tbody tr:nth-child(even) { background: #f8fafc; }
 .peaks-table tbody tr:hover { background: #eef2ff; }
+.peaks-table tbody tr.peak-find-match { background: #fef3c7; }
+.peaks-table tbody tr.peak-find-current { background: #fde68a; outline: 2px solid #d97706; outline-offset: -2px; }
+.peaks-table tbody tr.peak-invalid-coordinates { box-shadow: inset 3px 0 #dc2626; }
+.peaks-table td.peak-invalid-coordinate { background: #fee2e2; color: #b91c1c; font-weight: 700; }
 .peaks-table .peak-row-number,
 .peaks-table .peak-elevation { width: 4ch; min-width: 4ch; padding-left: 12px; padding-right: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .peaks-table .peak-row-number { color: #475569; text-align: right; background: #e8edf3; border-right-color: #b8c2ce; }
