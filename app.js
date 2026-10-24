@@ -10,13 +10,14 @@ const ICONS_MAP = {
 };
 
 let map, overviewLayer, detailLayer, hikingLayer, cyclingLayer;
-let photoMarkers = [], currentMarkers = [], allMarkers = [], loadedTracks = {}; 
+let photoMarkers = [], currentMarkers = [], allMarkers = [], loadedTracks = {};
+let peakRecords = [], peakMarkers = [], peaksLoaded = false, peakLoadFailed = false, peakLoadPromise = null, showPeaksOnMap = false, filterPeaksByFilters = false;
 let activeFilters = { ski: true, piste: true, hike: true, climb: true, rope: true, bike: true, 'bike+hike': true, trip: true, unknown: true };
 let activeTxtSearch = '';
 let activeSearchMode = 'literal';
 let selectedTourIdx = null;
 let activeYear = 'All', isInitialLoad = true; 
-let MAPTILER_KEY, SHEETS_CSV_URL;
+let MAPTILER_KEY, SHEETS_CSV_URL, SHEETS_CSV_PEAK_URL;
 let typingTimer;               // Timer for real-time debounce (hesitate with immediate search)
 const doneTypingInterval = 1200; // Wait ###ms after typing stops
 
@@ -126,6 +127,7 @@ function togglePanel(panelId) {
  * LOAD CONFIG load config.ts parameters:
  *   - MAPTILER_KEY
  *   - GOOGLE_SHEETS_URL holding the activities basic data
+ *   - GOOGLE-SHEETS_PEAK_URL holding the peak data (2nd Tab)
  * ------------------------------------------------------------------------*/
 async function loadConfig() {
     const response = await fetch(`./config.js?t=${new Date().getTime()}`);
@@ -133,10 +135,12 @@ async function loadConfig() {
     const text = await response.text();
     const keyMatch = text.match(/MAPTILER_KEY\s*=\s*['"]([^'"]+)['"]/);
     const urlMatch = text.match(/SHEETS_CSV_URL\s*=\s*['"]([^'"]+)['"]/);
+    const peakUrlMatch = text.match(/SHEETS_CSV_PEAK_URL\s*=\s*['"]([^'"]+)['"]/);
     const assetBaseMatch = text.match(/ASSETBASE_URL\s*=\s*['"]([^'"]+)['"]/);
     if (keyMatch && urlMatch && assetBaseMatch) {
         MAPTILER_KEY = keyMatch[1];
         SHEETS_CSV_URL = urlMatch[1];
+        SHEETS_CSV_PEAK_URL = peakUrlMatch ? peakUrlMatch[1] : '';
         ASSETBASE_URL = assetBaseMatch[1];
     }
 }
@@ -317,6 +321,8 @@ function changeBaseLayer(layerKey) {
  * ------------------------------------------------------------------------*/
 function getCurrentView() {
     const portal = document.getElementById('portal-view');
+    const peaks = document.getElementById('peaks-view');
+    if (peaks && peaks.style.display !== 'none') return 'peaks';
     
     // Check the actual computed style or the inline style
     if (portal && portal.style.display === 'none') {
@@ -355,6 +361,14 @@ function getTopPortalIndex() {
  * ------------------------------------------------------------------------*/
 function switchView(view, shouldFlyToTopIdx = false) {
     const isMap = view === 'map';
+    const isPeaks = view === 'peaks';
+    if (isPeaks) {
+        if (!peaksLoaded && activeYear !== 'All') {
+            activeYear = 'All';
+            populateYearSidebar();
+        }
+        loadPeakData();
+    }
     // retrieve the index of the topmost visible card in the portal before switching
     console.log(`Switching to ${view} view. shouldFlyToTopIdx: ${shouldFlyToTopIdx}`);  
     let topIdx = null;
@@ -364,7 +378,8 @@ function switchView(view, shouldFlyToTopIdx = false) {
     }
     
     // We toggle the display of the two main containers
-    document.getElementById('portal-view').style.display = isMap ? 'none' : 'block';
+    document.getElementById('portal-view').style.display = isMap || isPeaks ? 'none' : 'block';
+    document.getElementById('peaks-view').style.display = isPeaks ? 'block' : 'none';
     document.getElementById('map-view').style.display = isMap ? 'block' : 'none';
     
     // Portal Button State
@@ -380,6 +395,12 @@ function switchView(view, shouldFlyToTopIdx = false) {
     mapBtn.classList.toggle('bg-transparent', !isMap);
     mapBtn.classList.toggle('bg-white', isMap);
     mapBtn.classList.toggle('shadow-sm', isMap);
+
+    const peaksBtn = document.getElementById('nav-peaks');
+    peaksBtn.classList.toggle('opacity-50', !isPeaks);
+    peaksBtn.classList.toggle('bg-transparent', !isPeaks);
+    peaksBtn.classList.toggle('bg-white', isPeaks);
+    peaksBtn.classList.toggle('shadow-sm', isPeaks);
 
     // seems obsolete, but ensures inital setting on refresh (if year not changed)
     const label = document.getElementById('current-year-label');
@@ -398,12 +419,237 @@ function switchView(view, shouldFlyToTopIdx = false) {
             }
         }, 300); // Give CSS time to render the div
     } else {
-        renderPortal();
+        if (isPeaks) renderPeaksGrid();
+        else renderPortal();
         if (selectedTourIdx !== null) {
             restorePortalCard(selectedTourIdx);
         }
     }
 }
+
+function parseCsv(text) {
+    const rows = [];
+    let row = [], value = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"' && quoted && text[i + 1] === '"') {
+            value += '"';
+            i++;
+        } else if (char === '"') {
+            quoted = !quoted;
+        } else if (char === ',' && !quoted) {
+            row.push(value); value = '';
+        } else if ((char === '\n' || char === '\r') && !quoted) {
+            if (char === '\r' && text[i + 1] === '\n') i++;
+            row.push(value); value = '';
+            if (row.some(cell => cell.trim())) rows.push(row);
+            row = [];
+        } else {
+            value += char;
+        }
+    }
+    if (value.length || row.length) {
+        row.push(value);
+        if (row.some(cell => cell.trim())) rows.push(row);
+    }
+    return rows;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+}
+
+function peakField(record, ...names) {
+    for (const name of names) {
+        const value = record[name];
+        if (value !== undefined && value !== '') return value;
+    }
+    return '';
+}
+
+async function loadPeakData() {
+    if (peaksLoaded) return peakRecords;
+    if (peakLoadPromise) return peakLoadPromise;
+    peakLoadPromise = (async () => {
+        try {
+            if (!SHEETS_CSV_PEAK_URL) await loadConfig();
+            if (!SHEETS_CSV_PEAK_URL) throw new Error('Peaks CSV URL is not configured');
+            const separator = SHEETS_CSV_PEAK_URL.includes('?') ? '&' : '?';
+            const response = await fetch(`${SHEETS_CSV_PEAK_URL}${separator}t=${Date.now()}`);
+            if (!response.ok) throw new Error(`Peaks CSV request failed (${response.status})`);
+            const csvText = await response.text();
+            if (/accounts\.google\.com|<html/i.test(csvText.slice(0, 500))) {
+                throw new Error('Peaks sheet is not publicly published as CSV');
+            }
+            const rows = parseCsv(csvText);
+            if (!rows.length) throw new Error('Peaks CSV is empty or has no header row');
+            const headers = (rows.shift() || []).map(header => header.trim().toLowerCase().replace(/[\s-]+/g, '_'));
+            peakRecords = rows.map((cells, rowIndex) => {
+                const record = {};
+                headers.forEach((header, index) => record[header] = (cells[index] || '').trim());
+                record.sheet_row = rowIndex + 2;
+                record.name = peakField(record, 'name', 'peak', 'peak_name', 'title', 'gipfel');
+                record.massif = peakField(record, 'massif', 'massiv', 'range', 'gebirge', 'gebirgsgruppe');
+                record.elevation = Number(String(peakField(record, 'elevation', 'height', 'elev', 'm', 'hoehe', 'höhe')).replace(',', '.')) || 0;
+                record.first_visit = peakField(record, 'first_visit', 'date', 'firstvisit', 'erstbesteigung', 'first_visit_date', 'date_of_first_visit', 'datum1', 'datum_erstbesuch');
+                record.additional_visit = peakField(record, 'additional_visit', 'visit2', 'second_visit', 'datum2');
+                record.hint = peakField(record, 'hint', 'hinweis');
+                const latitude = peakField(record, 'lat', 'latitude');
+                const longitude = peakField(record, 'lon', 'lng', 'longitude');
+                record.latRaw = latitude;
+                record.lonRaw = longitude;
+                record.lat = latitude === '' ? NaN : Number(String(latitude).replace(',', '.'));
+                record.lon = longitude === '' ? NaN : Number(String(longitude).replace(',', '.'));
+                record.remark = peakField(record, 'remark', 'remarks', 'comment', 'notes', 'bemerkung');
+                return record;
+            });
+            if (!peakRecords.length) throw new Error('Peaks CSV has no rows with a recognized name column');
+            peaksLoaded = true;
+            peakLoadFailed = false;
+            showPeaksOnMap = true;
+            const peaksMapToggle = document.getElementById('show-peaks-map');
+            if (peaksMapToggle) peaksMapToggle.checked = true;
+            populateYearSidebar();
+            renderPeaksGrid();
+            renderPeakMarkers();
+            return peakRecords;
+        } catch (error) {
+            console.error('Peaks load failed:', error);
+            peakLoadFailed = true;
+            renderPeaksGrid();
+            return [];
+        } finally {
+            peakLoadPromise = null;
+        }
+    })();
+    return peakLoadPromise;
+}
+
+function getPeakYear(record) {
+    const match = String(record.first_visit || '').match(/\d{4}/);
+    return match ? match[0] : '';
+}
+
+function parsePeakDate(value) {
+    const text = String(value || '').trim();
+    let match = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+    if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getTime();
+    match = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+    if (match) return new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1])).getTime();
+    const timestamp = Date.parse(text);
+    return Number.isNaN(timestamp) ? NaN : timestamp;
+}
+
+function formatPeakDate(value) {
+    const timestamp = parsePeakDate(value);
+    if (Number.isNaN(timestamp)) return value || '';
+    const date = new Date(timestamp);
+    return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
+}
+
+window.togglePeakSortDirection = function() {
+    const button = document.getElementById('peak-sort-direction');
+    const descending = button.dataset.direction !== 'desc';
+    button.dataset.direction = descending ? 'desc' : 'asc';
+    button.textContent = descending ? 'Z→A' : 'A→Z';
+    renderPeaksGrid();
+};
+
+function getFilteredPeaks() {
+    return peakRecords.filter(record => {
+        const year = getPeakYear(record);
+        if (!filterPeaksByFilters) return true;
+        const yearMatches = activeYear === 'All' || year === activeYear;
+        return yearMatches && matchesTxtSearch({
+            title: record.name,
+            tags: record.massif,
+            description: [record.first_visit, record.additional_visit, record.hint, record.remark].filter(Boolean).join(' ')
+        }, activeTxtSearch);
+    });
+}
+
+function renderPeaksGrid() {
+    const container = document.getElementById('peaks-grid');
+    if (!container) return;
+    if (!peaksLoaded) {
+        container.innerHTML = peakLoadFailed
+            ? '<p class="text-red-600">Could not load peaks. Check that the peaks tab is published as CSV and that its URL is correct.</p>'
+            : '<p class="text-slate-500">Loading peaks…</p>';
+        return;
+    }
+    const sortKey = document.getElementById('peak-sort')?.value || 'name';
+    const descending = document.getElementById('peak-sort-direction')?.dataset.direction === 'desc';
+    const records = getFilteredPeaks().sort((first, second) => {
+        let comparison;
+        if (sortKey === 'elevation') {
+            comparison = first.elevation - second.elevation;
+        } else if (sortKey === 'first_visit') {
+            const firstDate = parsePeakDate(first.first_visit);
+            const secondDate = parsePeakDate(second.first_visit);
+            comparison = Number.isNaN(firstDate) ? (Number.isNaN(secondDate) ? 0 : 1)
+                : Number.isNaN(secondDate) ? -1 : firstDate - secondDate;
+        } else {
+            comparison = String(first[sortKey] || '').localeCompare(String(second[sortKey] || ''), undefined, { sensitivity: 'base' });
+        }
+        if (!comparison) return first.sheet_row - second.sheet_row;
+        return descending ? -comparison : comparison;
+    });
+    const count = document.getElementById('peaks-count');
+    if (count) count.textContent = `${records.length} shown / ${peakRecords.length} loaded`;
+    container.innerHTML = `
+        <div class="overflow-x-auto bg-white border border-slate-200">
+            <table class="peaks-table">
+                <thead><tr>
+                    <th class="peak-row-number">Row</th><th>Gipfel</th><th class="peak-elevation">m</th><th>Gebirge</th><th>Datum1</th><th>Hinweis</th><th>Lat</th><th>Lon</th>
+                </tr></thead>
+                <tbody>${records.map((peak, index) => `
+                    <tr>
+                        <td class="peak-row-number">${index + 1}</td>
+                        <td>${peak.name ? `<button class="peak-name-button" onclick="focusPeak(${peakRecords.indexOf(peak)})">${escapeHtml(peak.name)}</button>` : '<span class="text-red-600">(blank)</span>'}</td>
+                        <td class="peak-elevation">${escapeHtml(peak.m || peak.elevation || '')}</td>
+                        <td>${escapeHtml(peak.massif)}</td>
+                        <td class="peak-date">${escapeHtml(formatPeakDate(peak.first_visit))}</td>
+                        <td>${escapeHtml(peak.hint)}</td>
+                        <td>${escapeHtml(peak.latRaw || '')}</td>
+                        <td>${escapeHtml(peak.lonRaw || '')}</td>
+                    </tr>
+                `).join('')}</tbody>
+            </table>
+            ${records.length ? '' : '<p class="p-4 text-slate-500">No peaks match the current filters.</p>'}
+        </div>`;
+}
+
+window.togglePeakMap = async function(enabled) {
+    showPeaksOnMap = enabled;
+    if (enabled) await loadPeakData();
+    renderPeakMarkers();
+};
+
+window.togglePeakFilters = function(enabled) {
+    filterPeaksByFilters = enabled;
+    renderPeaksGrid();
+    renderPeakMarkers();
+};
+
+window.focusPeak = async function(index) {
+    await loadPeakData();
+    const peak = peakRecords[index];
+    if (!peak || !Number.isFinite(peak.lat) || !Number.isFinite(peak.lon)) return;
+    const year = getPeakYear(peak);
+    if (filterPeaksByFilters && year && activeYear !== 'All' && activeYear !== year) window.updateActiveYear(year);
+    showPeaksOnMap = true;
+    const toggle = document.getElementById('show-peaks-map');
+    if (toggle) toggle.checked = true;
+    switchView('map');
+    setTimeout(() => {
+        renderPeakMarkers();
+        map.flyTo([peak.lat, peak.lon], 12, { duration: 1.2 });
+        const marker = peakMarkers[index];
+        if (marker) marker.openPopup();
+    }, 350);
+};
 
 function restorePortalCard(idx, attempt = 0) {
     const card = document.querySelector(`.portal-card[data-idx="${idx}"]`);
@@ -444,6 +690,7 @@ function handleTxtSearch(val, isForced = false) {
 function executeSearch(val, shouldBlur) {
     activeTxtSearch = val;
     activeSearchMode = document.getElementById('regexSearchToggle')?.checked ? 'regex' : 'literal';
+    updateTrackLoadControls();
     const urlParams = new URLSearchParams(window.location.search);
     const deepLinkKey = urlParams.has('re') ? 're' : 's';
     const deepLinkQuery = urlParams.get(deepLinkKey);
@@ -460,6 +707,8 @@ function executeSearch(val, shouldBlur) {
 
     if (isMapActive) {
         renderMarkers();
+    } else if (getCurrentView() === 'peaks') {
+        renderPeaksGrid();
     } else {
         renderPortal();
     }
@@ -498,6 +747,7 @@ function matchesTxtSearch(p, searchStr) {
  *-------------------------------------------------------------*/
 window.updateActiveYear = function(yr) {
     activeYear = yr;
+    updateTrackLoadControls();
     
     // Sync the Sidebar (Left)
     populateYearSidebar(); 
@@ -510,6 +760,8 @@ window.updateActiveYear = function(yr) {
     // Refresh views
     if ( isMapVisible ) {
         renderMarkers();
+    } else if (getCurrentView() === 'peaks') {
+        renderPeaksGrid();
     } else {
         renderPortal(); 
     }
@@ -662,7 +914,9 @@ function getPopupHTML(p, idx) {
  * Populates the sidebar with years from the dataset
  *----------------------------------------------------------------*/
 function populateYearSidebar() {
-    const yrs = ['All', ...new Set(photoMarkers.map(p => p.year.toString()))].sort().reverse();
+    const tourYears = photoMarkers.map(p => String(p.year || '')).filter(y => /^\d{4}$/.test(y));
+    const peakYears = peakRecords.map(getPeakYear).filter(Boolean);
+    const yrs = ['All', ...new Set([...tourYears, ...peakYears])].sort((a, b) => a === 'All' ? -1 : b === 'All' ? 1 : Number(b) - Number(a));
     const side = document.getElementById('sidebar-years');
     side.innerHTML = yrs.map(y => `
         <div class="year-btn ${y === activeYear ? 'active' : ''}" onclick="updateActiveYear('${y}')">
@@ -772,6 +1026,8 @@ function renderPortal() {
 
         if (i < targets.length) {
             requestAnimationFrame(processBatch);
+        } else {
+            renderPeakMarkers();
         }
     }
     processBatch();
@@ -995,11 +1251,13 @@ function setupEvents() {
                 
                 // 3. Update the button's look
                 btn.classList.toggle('filter-button-active', activeFilters[activityKey]);
+                updateTrackLoadControls();
                 
                 // 4. Refresh map/portal to reflect the new filter state
                 executeSearch(activeTxtSearch,false); // use the search function to refresh views without changing the search term
             };
         });
+    updateTrackLoadControls();
 }
 
 /* -------------------------------------------------------------------------
@@ -1300,31 +1558,20 @@ window.clearPowerSearch = function() {
     syncToFirstVisible();
 };
 
-/* -------------------------------------------------------------------------
-    * SHOW ALL TRACKS that are not already visible and match the active filters
-    * Function triggered by gear wheel button!
-    --------------------------------------------------------------------------*/
-window.showAllTracks = function() {
+function loadTracksBatch(ignoreFilters) {
     let runningBounds = L.latLngBounds();
     let processedCount = 0;
-    // power-search conflicts with showALL - so clear it!
-    const searchBox = document.getElementById('power-search');
-        if (searchBox) searchBox.value = "";
-        
-    // 1. Identify all markers that match current filters AND have a GPX file
     const tracksToProcess = photoMarkers.filter((p) => {
         const rawAct = (p.activity) ? p.activity.toLowerCase().trim() : '';
         const activityKey = ICONS_MAP.hasOwnProperty(rawAct) ? rawAct : 'unknown';
         const yearMatch = (activeYear === 'All' || p.year.toString() === activeYear);
         const filterMatch = (activityKey === 'unknown') || activeFilters[activityKey];
-        
-        // Only zoom to things that actually have a track to show
-        return yearMatch && filterMatch && p.gpx && p.gpx.length > 5;
+        const searchMatch = matchesTxtSearch(p, activeTxtSearch);
+        return (ignoreFilters || (yearMatch && filterMatch && searchMatch)) && p.gpx && p.gpx.length > 5;
     });
 
     if (tracksToProcess.length === 0) return;
 
-    // 2. The Final Master Zoom check
     const finalizeMasterView = () => {
         processedCount++;
         if (processedCount === tracksToProcess.length && runningBounds.isValid()) {
@@ -1332,7 +1579,6 @@ window.showAllTracks = function() {
         }
     };
 
-    // 3. Process each track
     tracksToProcess.forEach((p) => {
         const idx = photoMarkers.indexOf(p);
         
@@ -1358,6 +1604,33 @@ window.showAllTracks = function() {
             }
         }
     });
+}
+
+function hasActiveTrackFilters() {
+    return activeYear !== 'All'
+        || Object.values(activeFilters).some(isActive => !isActive)
+        || activeTxtSearch.trim() !== '';
+}
+
+function updateTrackLoadControls() {
+    const button = document.getElementById('load-filtered-tracks-btn');
+    const status = document.getElementById('track-filter-status');
+    if (!button || !status) return;
+    const filtersActive = hasActiveTrackFilters();
+    button.disabled = !filtersActive;
+    button.classList.toggle('opacity-50', !filtersActive);
+    button.classList.toggle('cursor-not-allowed', !filtersActive);
+    status.textContent = filtersActive ? 'Filter aktiv' : 'Keine Filter aktiv';
+}
+
+window.showFilteredTracks = function() {
+    if (!hasActiveTrackFilters()) return;
+    loadTracksBatch(false);
+};
+
+window.showAllTracks = function() {
+    if (!window.confirm('Alle Tracks über alle Jahre und Aktivitäten laden? Dabei werden möglicherweise viele GPX-Dateien heruntergeladen.')) return;
+    loadTracksBatch(true);
 };
 
 /* -------------------------------------------------------------------------
@@ -1431,8 +1704,40 @@ function renderMarkers() {
         if (i < targets.length) {
             requestAnimationFrame(processBatch);
         }
-    }   
+    }
     processBatch();
+}
+
+function renderPeakMarkers() {
+    if (!map) return;
+    for (let index = 0; index < peakRecords.length; index++) {
+        const peak = peakRecords[index];
+        let marker = peakMarkers[index];
+        const year = getPeakYear(peak || {});
+        const peakFiltersMatch = !filterPeaksByFilters || (
+            (activeYear === 'All' || year === activeYear)
+            && matchesTxtSearch({ title: peak?.name, tags: peak?.massif, description: [peak?.first_visit, peak?.additional_visit, peak?.hint, peak?.remark].filter(Boolean).join(' ') }, activeTxtSearch)
+        );
+        const shouldShow = showPeaksOnMap && peak && Number.isFinite(peak.lat) && Number.isFinite(peak.lon)
+            && peakFiltersMatch;
+        if (!shouldShow) {
+            if (marker && map.hasLayer(marker)) map.removeLayer(marker);
+            continue;
+        }
+        if (!marker) {
+            const icon = L.divIcon({
+                className: 'peak-marker-icon',
+                html: '<span class="peak-map-pin"><span class="peak-pin-head"></span><span class="peak-pin-needle"></span></span>',
+                iconSize: [18, 25],
+                iconAnchor: [9, 24]
+            });
+            peakMarkers[index] = L.marker([peak.lat, peak.lon], { icon, zIndexOffset: 1200 })
+                .bindPopup(`<div class="text-center"><strong>${escapeHtml(peak.name)}</strong><div>${escapeHtml(peak.massif)}</div><div>${peak.elevation || ''} m · ${escapeHtml(peak.first_visit)}</div>${peak.additional_visit ? `<div>Additional visit: ${escapeHtml(peak.additional_visit)}</div>` : ''}${peak.hint ? `<p>${escapeHtml(peak.hint)}</p>` : ''}${peak.remark ? `<p>${escapeHtml(peak.remark)}</p>` : ''}</div>`)
+                .bindTooltip(peak.name, { direction: 'top', offset: [0, -15], opacity: 0.9, className: 'hover-title' });
+            marker = peakMarkers[index];
+        }
+        if (!map.hasLayer(marker)) marker.addTo(map);
+    }
 }
 
 //-----------------------------------------

@@ -114,7 +114,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 }
 
 /* View Containers: Absolute positioning relative to #content-area */
-#portal-view, #map-view { 
+#portal-view, #peaks-view, #map-view { 
     flex-grow: 1; /* Take up the remaining space */
     position: relative; /* Changed from absolute */
     width: 100%;
@@ -127,11 +127,81 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     height: 0; /* Pro-tip: This forces Flexbox to calculate height based on the parent, not the content */
     min-height: 100%; /* Ensures it fills the space */
 }
+#peaks-view {
+    display: none;
+    background: #f9fafb;
+    padding: 20px;
+    overflow-y: auto;
+    height: 0;
+    min-height: 100%;
+}
+.peaks-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.peaks-table th, .peaks-table td { padding: 7px 9px; border: 1px solid #d1d5db; vertical-align: top; }
+.peaks-table th { position: sticky; top: 0; z-index: 1; background: #f1f5f9; font-weight: 700; white-space: nowrap; }
+.peaks-table tbody tr:nth-child(even) { background: #f8fafc; }
+.peaks-table tbody tr:hover { background: #eef2ff; }
+.peaks-table .peak-row-number,
+.peaks-table .peak-elevation { width: 4ch; min-width: 4ch; padding-left: 12px; padding-right: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.peaks-table .peak-row-number { color: #475569; text-align: right; background: #e8edf3; border-right-color: #b8c2ce; }
+.peaks-table th.peak-row-number { background: #dce3eb; color: #334155; }
+.peaks-table .peak-elevation { text-align: right; }
+.peaks-table tbody tr:hover .peak-row-number { background: #dbe4ef; }
+.peaks-table .peak-date { white-space: nowrap; font-variant-numeric: tabular-nums lining-nums; }
+.peak-name-button { color: #1d4ed8; font-weight: 700; text-align: left; white-space: nowrap; }
 #map-view { z-index: 5; display: none; flex-direction: column; /* Ensure internal elements layout correctly */
             width: 100%; height: 100%; overflow: hidden; } /* Hidden by default, switchView handles this */
 
 /* Map styling to fill the entire section */
 #map-container, #map { width: 100%; height: 100%; position: relative; display: block; }
+
+.peak-marker-icon { background: transparent; border: 0; }
+.peak-map-pin {
+    width: 18px;
+    height: 25px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: rotate(22deg);
+    transform-origin: 50% 96%;
+}
+.peak-pin-head {
+    position: relative;
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    border: 2px solid rgba(91, 33, 182, 0.98);
+    border-radius: 50%;
+    background: rgba(124, 58, 237, 0.72);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.peak-pin-head::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #fff;
+    content: "";
+    transform: translate(-50%, -50%);
+}
+.peak-pin-needle {
+    position: relative;
+    width: 2px;
+    height: 8px;
+    background: rgba(91, 33, 182, 0.98);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.peak-pin-needle::after {
+    position: absolute;
+    bottom: -1px;
+    left: -1px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #5b21b6;
+    content: "";
+}
 
 /* --- UI ELEMENTS --- */
 .year-btn { padding: 12px 20px; cursor: pointer; font-weight: 700; color: #64748b; border-left: 4px solid transparent; transition: 0.2s; }
