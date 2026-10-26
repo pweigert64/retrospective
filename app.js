@@ -156,6 +156,10 @@ async function fetchSheetData() {
         const csvText = await response.text();
         const lines = csvText.split(/\r?\n/);
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const yearHeader = headers.find(header => /^(19|20)\d{2}$/.test(header));
+        if (yearHeader && !headers.includes('year')) {
+            headers[headers.indexOf(yearHeader)] = 'year';
+        }
 
         photoMarkers = lines.slice(1).filter(l => l.trim() !== "").map(line => {
             const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
@@ -196,7 +200,7 @@ async function fetchSheetData() {
         });
         
         // FIXED: Initial Year Detection
-        const yearsInData = [...new Set(photoMarkers.map(p => p.year.toString()))]
+        const yearsInData = [...new Set(photoMarkers.map(p => String(p.year || '')))]
                             .filter(y => y && y.length === 4)
                             .sort((a, b) => b - a);
         
@@ -1292,7 +1296,7 @@ window.syncToFirstVisible = function() {
     const currentSelection = photoMarkers.filter((p) => {
         const rawAct = (p.activity) ? p.activity.toLowerCase().trim() : '';
         const activityKey = ICONS_MAP.hasOwnProperty(rawAct) ? rawAct : 'unknown';
-        const yearMatch = (activeYear === 'All' || p.year.toString() === activeYear);
+        const yearMatch = (activeYear === 'All' || String(p.year || '') === activeYear);
         const filterMatch = (activityKey === 'unknown') || activeFilters[activityKey];
         return yearMatch && filterMatch;
     });
@@ -1475,7 +1479,7 @@ window.loadGpxTrack = function(idx, shouldZoom = true) {
 function getFilteredTours(targetView = 'map') {
     // Standard Filter logic
     let filtered = photoMarkers.filter(p => {
-        const pYear = p.year.toString();
+        const pYear = String(p.year || '');
         const yearMatch = (activeYear === 'All' || pYear === activeYear);
         const searchMatch = matchesTxtSearch(p, activeTxtSearch);
         const rawAct = p.activity?.toLowerCase().trim();
@@ -1651,7 +1655,7 @@ function loadTracksBatch(ignoreFilters) {
     const tracksToProcess = photoMarkers.filter((p) => {
         const rawAct = (p.activity) ? p.activity.toLowerCase().trim() : '';
         const activityKey = ICONS_MAP.hasOwnProperty(rawAct) ? rawAct : 'unknown';
-        const yearMatch = (activeYear === 'All' || p.year.toString() === activeYear);
+        const yearMatch = (activeYear === 'All' || String(p.year || '') === activeYear);
         const filterMatch = (activityKey === 'unknown') || activeFilters[activityKey];
         const searchMatch = matchesTxtSearch(p, activeTxtSearch);
         return (ignoreFilters || (yearMatch && filterMatch && searchMatch)) && p.gpx && p.gpx.length > 5;
