@@ -161,6 +161,11 @@
 							<!-- removed year selector -->
 							<!-- removed activity filters -->
 							<div class="pt-1 border-t">
+								<div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Koordinaten</div>
+								<button id="coordinate-pick-mode" type="button" class="filter-button coordinate-pick-button w-full min-h-11 bg-white" onclick="toggleCoordinatePickMode()" aria-pressed="false">📍 Marker setzen</button>
+								<p id="coordinate-copy-status" class="mt-1 text-[11px] leading-snug text-slate-500">Alt + Linksklick kopiert Lat und Lon.</p>
+							</div>
+							<div class="pt-1 border-t">
 								<div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Track Control:</div>
 								<div class="flex flex-col gap-2">
 									<button id="load-filtered-tracks-btn" class="filter-button w-full min-h-11 bg-emerald-700 text-white border-none" onclick="showFilteredTracks()">🗺️ Tracks laden [Filter]</button>

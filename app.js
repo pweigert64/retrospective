@@ -13,6 +13,7 @@ let map, overviewLayer, detailLayer, hikingLayer, cyclingLayer;
 let photoMarkers = [], currentMarkers = [], allMarkers = [], loadedTracks = {};
 let peakRecords = [], peakMarkers = [], peaksLoaded = false, peakLoadFailed = false, peakLoadPromise = null, showPeaksOnMap = false, filterPeaksByFilters = false;
 let peakFindMatches = [], peakFindPosition = -1;
+let coordinatePickMode = false, coordinateSelectionMarker = null, lastCopiedCoordinates = '';
 let activeFilters = { ski: true, piste: true, hike: true, climb: true, rope: true, bike: true, 'bike+hike': true, trip: true, unknown: true };
 let activeTxtSearch = '';
 let activeSearchMode = 'literal';
@@ -287,6 +288,7 @@ function initMap() {
     });
 
     setupEvents();
+    setupCoordinatePicker();
     renderMarkers();
 }
 
@@ -1349,6 +1351,125 @@ function setupEvents() {
             };
         });
     updateTrackLoadControls();
+}
+
+function setupCoordinatePicker() {
+    map.on('click', event => {
+        if (coordinatePickMode || event.originalEvent?.altKey) {
+            L.DomEvent.stop(event.originalEvent);
+            copyMapCoordinates(event.latlng);
+        } else if (coordinateSelectionMarker) {
+            clearCoordinatePin();
+        }
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Alt' && getCurrentView() === 'map') {
+            map.getContainer().classList.add('coordinate-alt-pick-mode');
+        }
+    });
+    document.addEventListener('keyup', event => {
+        if (event.key === 'Alt') map.getContainer().classList.remove('coordinate-alt-pick-mode');
+    });
+    window.addEventListener('blur', () => map.getContainer().classList.remove('coordinate-alt-pick-mode'));
+}
+
+async function copyMapCoordinates(latlng) {
+    const latitude = latlng.lat.toFixed(6);
+    const longitude = latlng.lng.toFixed(6);
+    const coordinateText = `${latitude}\t${longitude}`;
+    const status = document.getElementById('coordinate-copy-status');
+
+    if (coordinateSelectionMarker) map.removeLayer(coordinateSelectionMarker);
+    const pinIcon = L.divIcon({
+        className: 'peak-marker-icon coordinate-pin-icon',
+        html: '<span class="peak-map-pin"><span class="peak-pin-head"></span><span class="peak-pin-needle"></span></span>',
+        iconSize: [18, 25],
+        iconAnchor: [9, 24]
+    });
+    coordinateSelectionMarker = L.marker(latlng, {
+        icon: pinIcon,
+        zIndexOffset: 2000,
+        keyboard: false,
+        bubblingMouseEvents: false,
+        title: `Ausgewählte Koordinate ${latitude}, ${longitude}`
+    }).addTo(map).bindTooltip(`${latitude}, ${longitude}`, {
+        permanent: true,
+        direction: 'top',
+        offset: [0, -20],
+        className: 'coordinate-pin-label'
+    });
+    updateCoordinatePickButton();
+
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(coordinateText);
+        } else {
+            const temporaryInput = document.createElement('textarea');
+            temporaryInput.value = coordinateText;
+            temporaryInput.style.position = 'fixed';
+            temporaryInput.style.opacity = '0';
+            document.body.appendChild(temporaryInput);
+            temporaryInput.select();
+            const copied = document.execCommand('copy');
+            temporaryInput.remove();
+            if (!copied) throw new Error('Clipboard copy was denied');
+        }
+        lastCopiedCoordinates = `${latitude}, ${longitude}`;
+        updateCoordinatePickButton();
+        updateCoordinateCopyStatus();
+    } catch (error) {
+        console.error('Coordinate copy failed:', error);
+        if (status) status.textContent = 'Clipboard-Zugriff nicht verfügbar';
+    }
+}
+
+window.clearCoordinatePin = function(updateStatus = true) {
+    if (!coordinateSelectionMarker) return;
+    map.removeLayer(coordinateSelectionMarker);
+    coordinateSelectionMarker = null;
+    updateCoordinatePickButton();
+    if (updateStatus) updateCoordinateCopyStatus('Marker gelöscht.');
+};
+
+window.toggleCoordinatePickMode = function() {
+    if (coordinateSelectionMarker) {
+        coordinatePickMode = false;
+        clearCoordinatePin();
+    } else {
+        coordinatePickMode = true;
+        updateCoordinatePickButton();
+    }
+    const mapContainer = map?.getContainer();
+    mapContainer?.classList.toggle('coordinate-pick-mode', coordinatePickMode);
+    updateCoordinateCopyStatus();
+};
+
+function updateCoordinatePickButton() {
+    const button = document.getElementById('coordinate-pick-mode');
+    if (button) {
+        const hasMarker = !!coordinateSelectionMarker;
+        button.textContent = hasMarker ? '✕ Marker löschen' : '📍 Marker setzen';
+        button.title = lastCopiedCoordinates
+            ? `Clipboard enthält: ${lastCopiedCoordinates}`
+            : 'Koordinatenmarker setzen';
+        button.setAttribute('aria-pressed', String(coordinatePickMode || hasMarker));
+        button.classList.toggle('filter-button-active', coordinatePickMode || hasMarker);
+    }
+}
+
+function updateCoordinateCopyStatus(fallbackMessage) {
+    const status = document.getElementById('coordinate-copy-status');
+    if (!status) return;
+    if (lastCopiedCoordinates) {
+        status.textContent = `📋 Kopiert: ${lastCopiedCoordinates}`;
+    } else if (fallbackMessage) {
+        status.textContent = fallbackMessage;
+    } else {
+        status.textContent = coordinatePickMode
+            ? 'Tippen, um Lat und Lon zu kopieren.'
+            : 'Alt + Linksklick kopiert Lat und Lon.';
+    }
 }
 
 /* -------------------------------------------------------------------------
