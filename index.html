@@ -58,18 +58,24 @@
 		<div id="txtSearchToolbar" class="hidden bg-white border-b px-4 py-3 flex flex-col gap-4 shadow-sm z-[1001]">
 			<!-- LINE 1: Filters -->
 			<div class="flex flex-col gap-1.5">
-				<!-- "Filter:" label is now always visible and left-aligned -->
-				<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Aktivität Filter:</span>
+				<div class="flex items-center justify-start gap-1.5">
+					<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Aktivität Filter:</span>
+					<label class="flex items-center gap-1.5 text-[10px] text-slate-500 shrink-0">
+						<input type="checkbox" id="allActivitiesToggle" checked>
+						<span>alle aktiv</span>
+					</label>
+				</div>
 				
 				<div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1" id="header-filter-bar">
-					<button class="filter-button filter-button-active" data-activity="ski">❄️</button>
-					<button class="filter-button filter-button-active" data-activity="piste">🚠</button>
-					<button class="filter-button filter-button-active" data-activity="hike">🥾</button>
-					<button class="filter-button filter-button-active" data-activity="climb">⛰️</button>
-					<button class="filter-button filter-button-active" data-activity="rope">🧗</button>
-					<button class="filter-button filter-button-active" data-activity="bike">🚴</button>
-					<button class="filter-button filter-button-active" data-activity="bike+hike">🚵</button>
-					<button class="filter-button filter-button-active" data-activity="trip">🏛️</button>
+					<button class="filter-button filter-button-active" data-activity="ski" title="Ski touring">❄️</button>
+					<button class="filter-button filter-button-active" data-activity="piste" title="Piste skiing">🚠</button>
+					<button class="filter-button filter-button-active" data-activity="hike" title="Hiking">🥾</button>
+					<button class="filter-button filter-button-active" data-activity="scramble" title="unroped climbing" aria-label="unroped climbing">⛰️</button>
+					<button class="filter-button filter-button-active" data-activity="climb" title="roped climbing" aria-label="roped climbing">🧗</button>
+					<button class="filter-button filter-button-active" data-activity="alpine" title="Alpine tour">⛏️</button>
+					<button class="filter-button filter-button-active" data-activity="bike" title="Cycling">🚴</button>
+					<button class="filter-button filter-button-active" data-activity="bike+hike" title="Bike &amp; hike">🚵</button>
+					<button class="filter-button filter-button-active" data-activity="trip" title="Trip">🏛️</button>
 				</div>
 			</div>
 
@@ -239,4 +245,3 @@
 </body>
 
 </html>
-

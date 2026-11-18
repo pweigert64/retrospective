@@ -2,19 +2,28 @@ const myTitle = document.title;
 document.getElementById('current-year-label').textContent = myTitle;
 
 const COLORS = { 
-    'ski': '#4f46e5', 'hike': '#b54708', 'climb': '#dc2626', 'rope': '#dc2626',
+    'ski': '#4f46e5', 'hike': '#b54708', 'scramble': '#d97706', 'climb': '#dc2626', 'alpine': '#0f766e',
     'bike': '#024302', 'bike+hike': '#f97316', 'trip': '#9333ea', 'unknown': '#6b7280' 
 };
 const ICONS_MAP = { 
-    'ski': '❄️', 'piste': '🚠', 'hike': '🥾', 'climb': '⛰️', 'rope': '🧗', 'bike': '🚴', 'bike+hike': '🚵', 'trip': '🏛️' 
+    'ski': '❄️', 'piste': '🚠', 'hike': '🥾', 'scramble': '⛰️', 'climb': '🧗', 'alpine': '⛏️',
+    'bike': '🚴', 'bike+hike': '🚵', 'trip': '🏛️'
 };
+
+function normalizeActivityKey(activity) {
+    const key = String(activity || '').trim().toLowerCase();
+    // Keep the legacy rope value as an alias for the current roped-climbing category.
+    if (key === 'rope') return 'climb';
+    return key;
+}
 
 let map, overviewLayer, detailLayer, hikingLayer, cyclingLayer;
 let photoMarkers = [], currentMarkers = [], allMarkers = [], loadedTracks = {};
 let peakRecords = [], peakMarkers = [], peaksLoaded = false, peakLoadFailed = false, peakLoadPromise = null, showPeaksOnMap = false, filterPeaksByFilters = false;
 let peakFindMatches = [], peakFindPosition = -1;
 let coordinatePickMode = false, coordinateSelectionMarker = null, lastCopiedCoordinates = '';
-let activeFilters = { ski: true, piste: true, hike: true, climb: true, rope: true, bike: true, 'bike+hike': true, trip: true, unknown: true };
+const ACTIVITY_FILTER_KEYS = ['ski', 'piste', 'hike', 'scramble', 'climb', 'alpine', 'bike', 'bike+hike', 'trip'];
+let activeFilters = { ski: true, piste: true, hike: true, scramble: true, climb: true, alpine: true, bike: true, 'bike+hike': true, trip: true, unknown: true };
 let activeTxtSearch = '';
 let activeSearchMode = 'literal';
 let selectedTourIdx = null;
@@ -419,7 +428,7 @@ function switchView(view, shouldFlyToTopIdx = false) {
             renderMarkers(); // Force markers to re-evaluate their 'active' status
             if ( shouldFlyToTopIdx && topIdx !== null ) {
                 console.log("switchView::Top Portal Index:", topIdx, "title:", photoMarkers[topIdx] ? photoMarkers[topIdx].title : "N/A");
-                if (topIdx !== null && photoMarkers[topIdx] && photoMarkers[topIdx].lat && photoMarkers[topIdx].lon)
+                if (topIdx !== null && photoMarkers[topIdx] && hasTourCoordinates(photoMarkers[topIdx]))
                     { map.flyTo([photoMarkers[topIdx].lat, photoMarkers[topIdx].lon], 11, { duration: 1.5 }); }
                 else
                     { window.syncToFirstVisible(); }
@@ -923,9 +932,9 @@ function openStory(reportUrl) {
 // the buttons and the image and the title and the activity
 //------------------------------------------------------------------
 function getPopupHTML(p, idx) {
-    const rawAct = (p.activity) ? p.activity.toLowerCase().trim() : '';
-    const isKnown = ICONS_MAP.hasOwnProperty(rawAct);
-    const displayIcon = isKnown ? ICONS_MAP[rawAct] : '❓';
+    const activityKey = normalizeActivityKey(p.activity);
+    const isKnown = Object.prototype.hasOwnProperty.call(ICONS_MAP, activityKey);
+    const displayIcon = isKnown ? ICONS_MAP[activityKey] : '❓';
     
     // THE STATE CHECK: Is this track currently visible?
     const active = !!loadedTracks[idx]; 
@@ -992,7 +1001,7 @@ function getPopupHTML(p, idx) {
             ${imgHtml}
             <div class="popup-title" title="${p.title}">${p.title}</div>
             <div style="font-size: 9px; color: #666; margin-bottom: 8px;">
-                <span class="use-noto" style="font-size: 14px;">${displayIcon}</span> ${p.activity || 'unknown'}
+                <span class="use-noto" style="font-size: 14px;">${displayIcon}</span> ${isKnown ? activityKey : (p.activity || 'unknown')}
             </div>
             <div class="flex flex-row gap-2 justify-center">
                 ${leftBtnHtml} 
@@ -1021,12 +1030,32 @@ function populateYearSidebar() {
     `).join('');
 }
 
+function hasTourCoordinates(tour) {
+    if (!tour || tour.lat === '' || tour.lon === '' || tour.lat == null || tour.lon == null) return false;
+    const lat = Number(tour.lat);
+    const lon = Number(tour.lon);
+    return Number.isFinite(lat) && lat >= -90 && lat <= 90
+        && Number.isFinite(lon) && lon >= -180 && lon <= 180;
+}
+
+function hasTourTrack(tour) {
+    return !!(tour?.gpx && tour.gpx.length > 5);
+}
+
+function canShowTourOnMap(tour) {
+    if (hasTourCoordinates(tour) || hasTourTrack(tour)) return true;
+    // Collection headers may omit coordinates when their child entries locate the trip.
+    return !!(tour?.isCollectionHeader && tour.tripid && photoMarkers.some(sibling =>
+        sibling.tripid === tour.tripid && (hasTourCoordinates(sibling) || hasTourTrack(sibling))
+    ));
+}
+
 /**-----------------------------------------------------------------
  * create the HTML for a Portal Grid Cards
  *----------------------------------------------------------------*/
 function createPortalCard(p, idx) {
-    const rawAct = (p.activity) ? p.activity.toLowerCase().trim() : '';
-    const displayIcon = ICONS_MAP[rawAct] || '❓';
+    const activityKey = normalizeActivityKey(p.activity);
+    const displayIcon = ICONS_MAP[activityKey] || '❓';
     
     // --- RESTORED metaHtml DEFINITION ---
     let metaHtml = `<span class="use-noto mr-1.5">${displayIcon}</span>`;
@@ -1037,9 +1066,7 @@ function createPortalCard(p, idx) {
     // Status helpers
     const hasAlbum = p.album && p.album.startsWith('http');
     const hasReport = p.report && p.report.trim().length > 0; 
-    const hasLocation = (p.lat && p.lon);
-    
-    const canShowOnMap = hasLocation || p.isCollectionHeader;
+    const canShowOnMap = canShowTourOnMap(p);
     
     // --- DYNAMISCHER INHALTS-BLOCK (ALBUM UND/ODER BERICHT) ---
     let contentBlockHtml = '';
@@ -1067,7 +1094,7 @@ function createPortalCard(p, idx) {
     
     return `
         <div class="portal-card bg-white shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-all border border-gray-100" data-idx="${idx}">
-            <div class="portal-img-container cursor-pointer" onclick="jumpToMap(${idx})">
+            <div class="portal-img-container ${canShowOnMap ? 'cursor-pointer' : ''}" ${canShowOnMap ? `onclick="jumpToMap(${idx})"` : ''}>
                 <img src="${getAssetBase(p.year)}/${p.img}" 
                     class="w-full h-full object-contain" loading="lazy" onerror="this.style.display='none'">
             </div>
@@ -1132,6 +1159,8 @@ function renderPortal() {
 /**
  * Transitions to map, ensures correct year filter, focuses on marker, and auto-loads track
  * @param {array of numbers} idx - Global indices in photoMarkers array
+ * Opens a popup only when the selection resolves to one map marker. Multiple markers,
+ * including tracks belonging to the same tripid, are shown without opening popups.
  */
 function jumpToMap(indices) {
     const idxList = Array.isArray(indices) ? indices : [indices];
@@ -1157,7 +1186,7 @@ function jumpToMap(indices) {
 
     setTimeout(() => {
         let finalMarkersToShow = [];
-        let processedAlbums = new Set();
+        let processedTrips = new Set();
         let trackIndices = [];
 
         // 2. ITERATION ÜBER ALLE ÜBERGEBENEN INDIZES
@@ -1167,39 +1196,37 @@ function jumpToMap(indices) {
 
             // CHECK: Ist es ein Collection-Header?
             if (p.isCollectionHeader) {
-                // Nur verarbeiten, wenn wir dieses Album in diesem Durchlauf noch nicht hatten
-                if (!processedAlbums.has(p.album)) {
-                    processedAlbums.add(p.album);
+                // Nur einmal verarbeiten, auch wenn derselbe Trip mehrfach ausgewählt wurde.
+                if (!processedTrips.has(p.tripid)) {
+                    processedTrips.add(p.tripid);
                     
-                    // Alle Marker dieses Albums finden
+                    // Alle Einträge dieses Trips finden
                     const albumSiblings = photoMarkers.filter(m => m.tripid === p.tripid);
                     
                     // Koordinaten-Marker zur Liste hinzufügen
                     albumSiblings.forEach(s => {
-                        if (s.lat && s.lon) finalMarkersToShow.push(s);
+                        if (hasTourCoordinates(s)) finalMarkersToShow.push(s);
                         
                         // GPX-Track laden (falls vorhanden)
                         const sIdx = photoMarkers.indexOf(s);
-                        if (s.gpx && s.gpx.length > 5) trackIndices.push(sIdx);
-                        if (s.gpx && s.gpx.length > 5 && !loadedTracks[sIdx]) {
+                        if (hasTourTrack(s)) trackIndices.push(sIdx);
+                        if (hasTourTrack(s) && !loadedTracks[sIdx]) {
                             loadGpxTrack(sIdx, false);
                         }
                     });
                 }
             } 
             // ODER: Ist es ein normaler Marker mit Koordinaten?
-            else if (p.lat && p.lon) {
-                finalMarkersToShow.push(p);
-                if (p.gpx && p.gpx.length > 5) trackIndices.push(i);
-                if (p.gpx && p.gpx.length > 5 && !loadedTracks[i]) {
+            else if (hasTourCoordinates(p) || hasTourTrack(p)) {
+                if (hasTourCoordinates(p)) finalMarkersToShow.push(p);
+                if (hasTourTrack(p)) trackIndices.push(i);
+                if (hasTourTrack(p) && !loadedTracks[i]) {
                     loadGpxTrack(i, false);
                 }
             }
         });
 
         // 3. DARSTELLUNG: include loaded GPX bounds before fitting the map
-        if (finalMarkersToShow.length === 0) return;
-
         // Eindeutige Marker sicherstellen (falls ein Marker über Index UND Album kam)
         const uniqueMarkers = [...new Set(finalMarkersToShow)];
         const fitSelection = (attempt = 0) => {
@@ -1218,33 +1245,37 @@ function jumpToMap(indices) {
 
             if (!bounds.isValid()) return;
 
-            if (uniqueMarkers.length > 1 || trackIndices.length > 0) {
+            if (uniqueMarkers.length === 0 || uniqueMarkers.length > 1) {
+                // Fit track-only trips and multi-point trips without opening a popup.
                 map.flyToBounds(bounds, { padding: [80, 80], duration: 1.5 });
                 return;
             }
 
             const p = uniqueMarkers[0];
             const originalIdx = photoMarkers.indexOf(p);
-            map.flyTo([p.lat, p.lon], 12, { duration: 1.5 });
-
-            // Popup nur bei Einzelziel öffnen
-            map.once('moveend', () => {
+            // A single map marker opens its popup after the marker or its GPX track is in view.
+            const openPopup = () => {
                 let popupAttempts = 0;
                 const tryOpen = () => {
-                    let found = false;
-                    map.eachLayer(layer => {
-                        if (layer instanceof L.Marker && layer._idx === originalIdx) {
-                            layer.openPopup();
-                            found = true;
-                        }
-                    });
-                    if (!found && popupAttempts < 10) {
+                    const marker = allMarkers[originalIdx];
+                    if (marker && map.hasLayer(marker)) {
+                        marker.openPopup();
+                    } else if (popupAttempts < 10) {
                         popupAttempts++;
                         setTimeout(tryOpen, 100);
                     }
                 };
                 tryOpen();
-            });
+            };
+
+            if (trackIndices.length > 0) {
+                map.once('moveend', openPopup);
+                map.flyToBounds(bounds, { padding: [80, 80], duration: 1.5 });
+                return;
+            }
+
+            map.flyTo([p.lat, p.lon], 12, { duration: 1.5 });
+            map.once('moveend', openPopup);
         };
 
         fitSelection();
@@ -1296,10 +1327,10 @@ window.reloadData = async function() {
 window.syncToFirstVisible = function() {
     // 1. Find the first marker that survives current Sidebar filters
     const currentSelection = photoMarkers.filter((p) => {
-        const rawAct = (p.activity) ? p.activity.toLowerCase().trim() : '';
-        const activityKey = ICONS_MAP.hasOwnProperty(rawAct) ? rawAct : 'unknown';
+        const rawAct = normalizeActivityKey(p.activity);
+        const activityKey = Object.prototype.hasOwnProperty.call(ICONS_MAP, rawAct) ? rawAct : 'unknown';
         const yearMatch = (activeYear === 'All' || String(p.year || '') === activeYear);
-        const filterMatch = (activityKey === 'unknown') || activeFilters[activityKey];
+        const filterMatch = activeFilters[activityKey];
         return yearMatch && filterMatch;
     });
 
@@ -1334,23 +1365,45 @@ window.addEventListener('resize', function() {
     * SETUP EVENTS assigns the handlefunctions to the defined events.
     --------------------------------------------------------------------------*/
 function setupEvents() {
+    const allActivitiesToggle = document.getElementById('allActivitiesToggle');
+    allActivitiesToggle?.addEventListener('change', () => {
+        Object.keys(activeFilters).forEach(key => activeFilters[key] = allActivitiesToggle.checked);
+        syncActivityFilterControls();
+        updateTrackLoadControls();
+        executeSearch(activeTxtSearch, false);
+    });
+
     document.querySelectorAll('[data-activity]').forEach(btn => {
-            btn.onclick = () => {
-                // 1. Get the key (e.g., 'trip') from the button
-                const activityKey = btn.dataset.activity; 
-                
-                // 2. Toggle the true/false value in our Global State
-                activeFilters[activityKey] = !activeFilters[activityKey];
-                
-                // 3. Update the button's look
-                btn.classList.toggle('filter-button-active', activeFilters[activityKey]);
-                updateTrackLoadControls();
-                
-                // 4. Refresh map/portal to reflect the new filter state
-                executeSearch(activeTxtSearch,false); // use the search function to refresh views without changing the search term
-            };
-        });
+        btn.onclick = () => {
+            setActivityFilter(btn.dataset.activity);
+            syncActivityFilterControls();
+            updateTrackLoadControls();
+            executeSearch(activeTxtSearch, false);
+        };
+    });
+    syncActivityFilterControls();
     updateTrackLoadControls();
+}
+
+function setActivityFilter(activityKey) {
+    if (ACTIVITY_FILTER_KEYS.every(key => activeFilters[key])) {
+        Object.keys(activeFilters).forEach(key => activeFilters[key] = false);
+        activeFilters[activityKey] = true;
+        return;
+    }
+
+    activeFilters[activityKey] = !activeFilters[activityKey];
+    if (ACTIVITY_FILTER_KEYS.every(key => activeFilters[key])) activeFilters.unknown = true;
+}
+
+function syncActivityFilterControls() {
+    document.querySelectorAll('[data-activity]').forEach(btn => {
+        btn.classList.toggle('filter-button-active', !!activeFilters[btn.dataset.activity]);
+    });
+    const allActivitiesToggle = document.getElementById('allActivitiesToggle');
+    if (allActivitiesToggle) {
+        allActivitiesToggle.checked = ACTIVITY_FILTER_KEYS.every(key => activeFilters[key]);
+    }
 }
 
 function setupCoordinatePicker() {
@@ -1479,7 +1532,7 @@ window.loadGpxTrack = function(idx, shouldZoom = true) {
     const p = photoMarkers[idx];
     const url = `${getAssetBase(p.year)}/${p.gpx}`;
     const rawAct = p.activity?.toLowerCase().trim();
-    const color = COLORS[rawAct] || COLORS['unknown'];
+    const color = COLORS[normalizeActivityKey(rawAct)] || COLORS['unknown'];
 
     // 1. Toggle-Logik
     if (loadedTracks[idx]) {
@@ -1492,15 +1545,6 @@ window.loadGpxTrack = function(idx, shouldZoom = true) {
 
     // 2. Gruppe erstellen
     const trackGroup = L.featureGroup().addTo(map);
-
-    // Label/Tooltip hinzufügen
-    const label = L.tooltip({ 
-        permanent: true, 
-        direction: 'right', 
-        offset: [15, 0], 
-        className: 'track-label' 
-    }).setContent(p.title).setLatLng([p.lat, p.lon]);
-    trackGroup.addLayer(label);
 
     // 3. GPX Layer laden
     const trackLayer = new L.GPX(url, {
@@ -1550,8 +1594,8 @@ window.loadGpxTrack = function(idx, shouldZoom = true) {
         /*****
         const addDashes = (l) => {
             if (l instanceof L.Polyline) {
-                let dashPattern = p.activity === 'ski' ? '2, 12' : 
-                                 (p.activity === 'hike' || p.activity === 'climb' || p.activity === 'rope' ? '10, 10' : '20, 5');
+                let dashPattern = normalizeActivityKey(p.activity) === 'ski' ? '2, 12' :
+                                 (['hike', 'climb', 'scramble', 'alpine'].includes(normalizeActivityKey(p.activity)) ? '10, 10' : '20, 5');
                 
                 // Weiße Dash-Linie erstellen
                 const dashLine = L.polyline(l.getLatLngs(), { 
@@ -1578,9 +1622,20 @@ window.loadGpxTrack = function(idx, shouldZoom = true) {
         // Den gesamten GPX-Layer nach hinten schieben
         e.target.bringToBack();
 
+        const trackBounds = e.target.getBounds();
+        if (trackBounds.isValid()) {
+            const labelLocation = hasTourCoordinates(p) ? [p.lat, p.lon] : trackBounds.getCenter();
+            const label = L.tooltip({
+                permanent: true,
+                direction: 'right',
+                offset: [15, 0],
+                className: 'track-label'
+            }).setContent(p.title).setLatLng(labelLocation);
+            trackGroup.addLayer(label);
+        }
+
         if (shouldZoom) {
-            const b = e.target.getBounds();
-            if (b.isValid()) map.flyToBounds(b, { padding: [50, 50] });
+            if (trackBounds.isValid()) map.flyToBounds(trackBounds, { padding: [50, 50] });
         }
         
         loadedTracks[idx] = { group: trackGroup, filename: p.gpx, layer: e.target };
@@ -1603,7 +1658,7 @@ function getFilteredTours(targetView = 'map') {
         const pYear = String(p.year || '');
         const yearMatch = (activeYear === 'All' || pYear === activeYear);
         const searchMatch = matchesTxtSearch(p, activeTxtSearch);
-        const rawAct = p.activity?.toLowerCase().trim();
+        const rawAct = normalizeActivityKey(p.activity);
         const activityKey = ICONS_MAP[rawAct] ? rawAct : 'unknown';
         const filterMatch = activeFilters[activityKey];
         
@@ -1612,7 +1667,7 @@ function getFilteredTours(targetView = 'map') {
 
     if (targetView === 'map') {
         // Only return rows that have coordinates for the map markers
-        return filtered.filter(p => p.lat && p.lon);
+        return filtered.filter(hasTourCoordinates);
     }
 
     // now targetView !==  'map' PORTAL LOGIC: Hide childs of collection
@@ -1633,8 +1688,8 @@ function getFilteredTours(targetView = 'map') {
  */
 function createMarker(p, idx) {
     // Determine Activity and Icon
-    const rawAct = (p.activity) ? p.activity.toLowerCase().trim() : '';
-    const activityKey = ICONS_MAP.hasOwnProperty(rawAct) ? rawAct : 'unknown';
+    const rawAct = normalizeActivityKey(p.activity);
+    const activityKey = Object.prototype.hasOwnProperty.call(ICONS_MAP, rawAct) ? rawAct : 'unknown';
     const displayIcon = ICONS_MAP[activityKey] || '❓'; // ? for unknown actitvityKey 
 
     // Build the Icon (using your divIcon logic)
@@ -1709,6 +1764,7 @@ function handleDeepLink() {
     if ( matches.length > 1) {
         activeTxtSearch = query;
         showDeepLinkSearch(query);
+        // Pass all results together; jumpToMap keeps popups closed for multiple map markers.
         const targetIndices = matches.map(m => photoMarkers.indexOf(m));
         showDeepLinkMatch(targetIndices, deepLinkView);
         toggleSidebar('close');
@@ -1774,10 +1830,10 @@ function loadTracksBatch(ignoreFilters) {
     let runningBounds = L.latLngBounds();
     let processedCount = 0;
     const tracksToProcess = photoMarkers.filter((p) => {
-        const rawAct = (p.activity) ? p.activity.toLowerCase().trim() : '';
-        const activityKey = ICONS_MAP.hasOwnProperty(rawAct) ? rawAct : 'unknown';
+        const rawAct = normalizeActivityKey(p.activity);
+        const activityKey = Object.prototype.hasOwnProperty.call(ICONS_MAP, rawAct) ? rawAct : 'unknown';
         const yearMatch = (activeYear === 'All' || String(p.year || '') === activeYear);
-        const filterMatch = (activityKey === 'unknown') || activeFilters[activityKey];
+        const filterMatch = activeFilters[activityKey];
         const searchMatch = matchesTxtSearch(p, activeTxtSearch);
         return (ignoreFilters || (yearMatch && filterMatch && searchMatch)) && p.gpx && p.gpx.length > 5;
     });
