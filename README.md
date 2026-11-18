@@ -26,6 +26,8 @@ Based in **Linz, Austria**, this project documents extensive exploration of:
 ### Trip coordinates
 Trip collection headers do not need a latitude or longitude when a single point would misrepresent a trip across multiple regions. Leave the header coordinates blank; the map action uses coordinates and GPX tracks from the trip's entries instead. A trip with neither entry coordinates nor GPX tracks is not offered as mappable. No representative center point is inferred.
 
+Text searches in the portal also match a trip when the keyword appears in one of its entries, including that entry's tags.
+
 ### Activity categories
 `climb` means roped climbing, `scramble` means unroped climbing, and `alpine` means an alpine tour (Hochtour). The legacy sheet value `rope` is normalized to `climb`; `climb` and `scramble` remain distinct categories. Filter buttons, portal and map icons, marker colors, and track colors all use these categories.
 

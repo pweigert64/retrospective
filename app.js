@@ -1657,7 +1657,11 @@ function getFilteredTours(targetView = 'map') {
     let filtered = photoMarkers.filter(p => {
         const pYear = String(p.year || '');
         const yearMatch = (activeYear === 'All' || pYear === activeYear);
-        const searchMatch = matchesTxtSearch(p, activeTxtSearch);
+        const searchMatch = matchesTxtSearch(p, activeTxtSearch)
+            || (targetView === 'portal' && p.isCollectionHeader && p.tripid
+                && photoMarkers.some(sibling =>
+                    sibling.tripid === p.tripid && matchesTxtSearch(sibling, activeTxtSearch)
+                ));
         const rawAct = normalizeActivityKey(p.activity);
         const activityKey = ICONS_MAP[rawAct] ? rawAct : 'unknown';
         const filterMatch = activeFilters[activityKey];
