@@ -72,7 +72,7 @@
 					<button class="filter-button filter-button-active" data-activity="hike" title="Hiking">🥾</button>
 					<button class="filter-button filter-button-active" data-activity="scramble" title="unroped climbing" aria-label="unroped climbing">⛰️</button>
 					<button class="filter-button filter-button-active" data-activity="climb" title="roped climbing" aria-label="roped climbing">🧗</button>
-					<button class="filter-button filter-button-active" data-activity="alpine" title="Alpine tour">⛏️</button>
+					<button class="filter-button filter-button-active" data-activity="alpine" title="Hochtour">⛏️</button>
 					<button class="filter-button filter-button-active" data-activity="bike" title="Cycling">🚴</button>
 					<button class="filter-button filter-button-active" data-activity="bike+hike" title="Bike &amp; hike">🚵</button>
 					<button class="filter-button filter-button-active" data-activity="trip" title="Trip">🏛️</button>
@@ -222,6 +222,11 @@
         <div id="report-popup-content" class="p-6 overflow-y-auto text-sm text-gray-700 leading-relaxed space-y-4">
             </div>
     </div>
+</div>
+
+<div id="photo-lightbox" class="photo-lightbox hidden" role="dialog" aria-modal="true" aria-label="Foto vergrößert" onclick="handlePhotoLightboxBackdrop(event)">
+	<button type="button" class="photo-lightbox-close" onclick="closePhotoLightbox()" aria-label="Foto schließen">✕</button>
+	<img id="photo-lightbox-image" alt="">
 </div>
 
 <div id="info-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[3000] p-4">

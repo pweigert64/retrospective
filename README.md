@@ -28,6 +28,8 @@ Trip collection headers do not need a latitude or longitude when a single point 
 
 Text searches in the portal also match a trip when the keyword appears in one of its entries, including that entry's tags.
 
+For records with the same `tripid`, any missing or non-link `album` value inherits the first album URL found on that trip. Explicit album URLs on individual records are preserved.
+
 ### Activity categories
 `climb` means roped climbing, `scramble` means unroped climbing, and `alpine` means an alpine tour (Hochtour). The legacy sheet value `rope` is normalized to `climb`; `climb` and `scramble` remain distinct categories. Filter buttons, portal and map icons, marker colors, and track colors all use these categories.
 

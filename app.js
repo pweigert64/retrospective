@@ -45,6 +45,23 @@ function getAssetBase(year) {
     return `${base}${year}/`;
 }
 
+function inheritTripAlbumLinks(records) {
+    const albumByTripId = new Map();
+    records.forEach(record => {
+        const tripId = record.tripid?.trim();
+        if (tripId && record.album?.startsWith('http') && !albumByTripId.has(tripId)) {
+            albumByTripId.set(tripId, record.album);
+        }
+    });
+
+    records.forEach(record => {
+        const tripId = record.tripid?.trim();
+        if (tripId && !record.album?.startsWith('http') && albumByTripId.has(tripId)) {
+            record.album = albumByTripId.get(tripId);
+        }
+    });
+}
+
 /* -------------------------------------------------------------------------
  * TOGGLE Sidebar (Hamburger Menu) 
  * parameter: 'toggle', 'open', 'close'
@@ -208,6 +225,8 @@ async function fetchSheetData() {
             }
             return p;
         });
+
+        inheritTripAlbumLinks(photoMarkers);
         
         // FIXED: Initial Year Detection
         const yearsInData = [...new Set(photoMarkers.map(p => String(p.year || '')))]
@@ -665,6 +684,7 @@ window.handlePeakFindKey = function(event) {
 };
 
 document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closePhotoLightbox();
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && getCurrentView() === 'peaks') {
         event.preventDefault();
         const input = document.getElementById('peak-find-input');
@@ -672,6 +692,29 @@ document.addEventListener('keydown', event => {
         input?.select();
     }
 });
+
+window.openPhotoLightbox = function(image) {
+    const lightbox = document.getElementById('photo-lightbox');
+    const enlargedImage = document.getElementById('photo-lightbox-image');
+    if (!lightbox || !enlargedImage || !image?.src) return;
+
+    enlargedImage.src = image.src;
+    enlargedImage.alt = image.alt || '';
+    lightbox.classList.remove('hidden');
+};
+
+window.closePhotoLightbox = function() {
+    const lightbox = document.getElementById('photo-lightbox');
+    const enlargedImage = document.getElementById('photo-lightbox-image');
+    if (!lightbox || !enlargedImage) return;
+
+    lightbox.classList.add('hidden');
+    enlargedImage.removeAttribute('src');
+};
+
+window.handlePhotoLightboxBackdrop = function(event) {
+    if (event.target === event.currentTarget) closePhotoLightbox();
+};
 
 function renderPeaksGrid() {
     const container = document.getElementById('peaks-grid');
@@ -991,8 +1034,10 @@ function getPopupHTML(p, idx) {
         trackBtnText = '<span class="text-[14px] mr-1">🗺️</span> Track';
     }
 
-    const imgHtml = (p.img && p.img.length > 4) 
-        ? `<img src="${getAssetBase(p.year)}/${p.img}" class="photo-popup-img" onerror="this.style.display='none'">` 
+    const imgHtml = (p.img && p.img.length > 4)
+        ? `<button type="button" class="photo-popup-image-button" onclick="openPhotoLightbox(this.querySelector('img'))" aria-label="Foto vergrößern">
+                <img src="${getAssetBase(p.year)}/${p.img}" class="photo-popup-img" alt="${escapeHtml(p.title || '')}" onerror="this.closest('button').style.display='none'">
+            </button>`
         : '';
 
     // DAS RETURN-TEMPLATE
